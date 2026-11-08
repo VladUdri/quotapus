@@ -6,7 +6,7 @@
   "scripts": {
     "test": "npm run build && node --test dist/*.test.js dist/providers/*.test.js",
     "build": "tsc && mkdir -p dist/renderer && cp src/renderer/index.html dist/renderer/",
-    "start": "npm run build && electron ."
+    "start": "npm run build && node scripts/dev-plist.js && electron ."
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

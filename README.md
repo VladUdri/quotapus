@@ -41,8 +41,8 @@ curl -fsSL https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh |
 ```
 
 The installer downloads the latest [release](https://github.com/VladUdri/quotapus/releases) and the official
-Electron runtime (checksum-verified) into `~/.quotapus`, adds a `quotapus` command to `~/.local/bin`, and starts
-the app. Node is not required.
+Electron runtime (checksum-verified), assembles `~/Applications/Quotapus.app` (a menu bar app with no Dock icon,
+findable with Spotlight), adds a `quotapus` command to `~/.local/bin`, and starts it. Node is not required.
 
 ```bash
 quotapus start | stop | update | uninstall
