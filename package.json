@@ -1,0 +1,23 @@
+{
+  "name": "quotapus",
+  "version": "0.5.0",
+  "description": "Menu bar dashboard for AI usage quotas",
+  "main": "dist/main.js",
+  "scripts": {
+    "test": "npm run build && node --test dist/*.test.js dist/providers/*.test.js",
+    "build": "tsc && mkdir -p dist/renderer && cp src/renderer/index.html dist/renderer/",
+    "start": "npm run build && electron ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "33.4.11",
+    "gifenc": "^1.0.3",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VladUdri/quotapus.git"
+  },
+  "homepage": "https://vladudri.github.io/quotapus/"
+}

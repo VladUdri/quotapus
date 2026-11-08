@@ -1,0 +1,25 @@
+name: Release
+# Push a tag like v0.2.0 and this builds the app and publishes it as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # The release asset is just our compiled code. install.sh fetches Electron separately.
+      - run: tar czf quotapus-app.tar.gz --exclude='*.test.js' package.json dist assets
+      - run: gh release create "$GITHUB_REF_NAME" quotapus-app.tar.gz --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

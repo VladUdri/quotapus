@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>quotapus: know how much AI you have left</title>
+<meta name="description" content="A macOS menu bar app that shows your Claude and Cursor usage and forecasts when you'll run out.">
+<link rel="icon" href="icon.png">
+<style>
+  :root { --bg:#fbfbfd; --fg:#1d1d1f; --dim:#6e6e73; --line:rgba(0,0,0,.1); --card:#fff; --accent:#5b4bdb; --accent-fg:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111113; --fg:#f5f5f7; --dim:#a1a1a6; --line:rgba(255,255,255,.12); --card:#1c1c1e; --accent:#8b7dff; --accent-fg:#111; } }
+  * { box-sizing: border-box }
+  body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.55 -apple-system, system-ui, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased }
+  main { max-width: 980px; margin: 0 auto; padding: 0 24px }
+  .hero { text-align:center; padding: 72px 0 40px }
+  .hero img.icon { width: 96px; height: 96px }
+  h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.08; letter-spacing: -0.02em; margin: 20px 0 14px }
+  .sub { color: var(--dim); font-size: 20px; max-width: 560px; margin: 0 auto 32px }
+  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap }
+  button, .btn { font: inherit; font-size: 16px; border-radius: 12px; padding: 12px 20px; cursor: pointer; text-decoration:none; border: 1px solid var(--line) }
+  .primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600 }
+  .secondary { background: var(--card); color: var(--fg) }
+  .secondary[aria-disabled="true"] { opacity: .55; cursor: default }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace }
+  .cmd { margin: 22px auto 0; max-width: 640px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; text-align:left; word-break: break-all }
+  .note { color: var(--dim); font-size: 14px; margin-top: 14px }
+  .shot { display:block; margin: 48px auto 0; width: min(440px, 100%); border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.18) }
+  .features { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin: 72px 0 }
+  .feature { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px }
+  .feature h3 { margin: 0 0 6px; font-size: 18px }
+  .feature p { margin: 0; color: var(--dim); font-size: 15.5px }
+  h2 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 12px }
+  section.row { display:grid; grid-template-columns: 1fr 1fr; gap: 32px; margin: 0 0 72px }
+  @media (max-width: 700px) { section.row { grid-template-columns: 1fr } }
+  section.row p, section.row li { color: var(--dim) }
+  ol { padding-left: 20px; margin: 8px 0 0 }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--dim); font-size: 14px; display:flex; justify-content: space-between; flex-wrap: wrap; gap: 8px }
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <img class="icon" src="icon.png" alt="">
+    <h1>Know how much AI<br>you have left.</h1>
+    <p class="sub">quotapus shows your Claude and Cursor usage in the Mac menu bar and forecasts when you'll run out.</p>
+    <div class="cta">
+      <button class="primary" id="copy">Copy install command</button>
+    </div>
+    <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh | bash</code></div>
+    <p class="note">macOS · Apple Silicon and Intel · free and open source (MIT). Paste the command into Terminal.</p>
+    <picture>
+      <source srcset="shot-dark.png" media="(prefers-color-scheme: dark)">
+      <img class="shot" src="shot-light.png" alt="The quotapus popup: a 5-hour session at 37% with a chart projecting when the limit will be reached">
+    </picture>
+  </header>
+
+  <div class="features">
+    <div class="feature"><h3>Will I run out?</h3><p>A forecast from your recent pace, such as "Runs out in ~1h 39m". Shown only when the limit would be reached before the quota resets.</p></div>
+    <div class="feature"><h3>A chart you can read</h3><p>The whole quota window at a glance: usage so far, the projected path, and the pace that would make it last.</p></div>
+    <div class="feature"><h3>Where it went</h3><p>See which project folders used your Claude tokens. Read locally from Claude Code's logs. Token counts only, never prompt text.</p></div>
+  </div>
+
+  <section class="row">
+    <div>
+      <h2>Stays out of the way</h2>
+      <p>A gauge in the menu bar, a click for details, and notifications at the thresholds you choose. If a refresh fails, the last values stay visible and are marked as out of date.</p>
+    </div>
+    <div>
+      <h2>Private</h2>
+      <p>quotapus uses the logins Claude Code and Cursor already have on your Mac and connects only to Anthropic and Cursor. It never modifies those logins, has no analytics, and needs no account.</p>
+    </div>
+  </section>
+
+  <section class="row">
+    <div>
+      <h2>Getting started</h2>
+      <ol>
+        <li>Run the install command in Terminal. It installs quotapus into <code>~/.quotapus</code> and starts it. Node is not required.</li>
+        <li>Sign in to Claude Code or Cursor if you haven't already.</li>
+        <li>Click the gauge icon in the menu bar. Use the gear for settings, including launch at login.</li>
+      </ol>
+      <p>Manage it later with <code>quotapus start | stop | update | uninstall</code>.</p>
+    </div>
+    <div>
+      <h2>Works with</h2>
+      <p><b>Claude</b> via Claude Code: 5-hour session, weekly, and per-model weekly limits.<br><b>Cursor</b>: monthly plan usage and on-demand spend.</p>
+      <p>Cursor support is experimental. Both providers use unofficial usage endpoints, which may change.</p>
+    </div>
+  </section>
+
+  <footer><span>quotapus · open source (MIT) · <a href="https://github.com/VladUdri/quotapus" style="color:inherit">GitHub</a></span><span>Not affiliated with Anthropic or Cursor.</span></footer>
+</main>
+<script>
+  document.getElementById("copy").onclick = async (e) => {
+    try { await navigator.clipboard.writeText(document.getElementById("cmd").textContent); e.target.textContent = "Copied. Paste it in Terminal"; }
+    catch { e.target.textContent = "Select the command below"; }
+    setTimeout(() => (e.target.textContent = "Copy install command"), 2500);
+  };
+</script>
+</body>
+</html>

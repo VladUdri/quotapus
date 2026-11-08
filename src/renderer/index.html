@@ -1,0 +1,666 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  /* Text colors (--ok/--warn/--bad) are darker than graphic colors (--*-g) in light mode so text stays readable. */
+  :root { --fg:#1d1d1f; --fg2:#3a3a3c; --dim:#6e6e73; --faint:#8e8e93; --track:rgba(0,0,0,.08); --grid:rgba(0,0,0,.07); --card:rgba(255,255,255,.55);
+          --edge:rgba(0,0,0,.07); --sep:rgba(0,0,0,.08); --hover:rgba(0,0,0,.06); --solid:#fff; --tip:#fff; --tipfg:#1d1d1f;
+          --ok:#248a3d; --warn:#b25f00; --bad:#d70015; --ok-g:#34c759; --warn-g:#f5a000; --bad-g:#ff3b30;
+          --p1:rgba(29,29,31,.62); --p2:rgba(29,29,31,.40); --p3:rgba(29,29,31,.24); --p4:rgba(29,29,31,.12); }
+  @media (prefers-color-scheme: dark) { :root { --fg:#f5f5f7; --fg2:#d1d1d6; --dim:#a1a1a6; --faint:#8e8e93; --track:rgba(255,255,255,.12); --grid:rgba(255,255,255,.08); --card:rgba(255,255,255,.06);
+          --edge:rgba(255,255,255,.09); --sep:rgba(255,255,255,.09); --hover:rgba(255,255,255,.1); --solid:#1c1c1e; --tip:#3a3a3c; --tipfg:#f5f5f7;
+          --ok:#30d158; --warn:#ffb340; --bad:#ff6961; --ok-g:#30d158; --warn-g:#ffb340; --bad-g:#ff6961;
+          --p1:rgba(245,245,247,.70); --p2:rgba(245,245,247,.46); --p3:rgba(245,245,247,.28); --p4:rgba(245,245,247,.14); } }
+  * { box-sizing: border-box }
+  body { font: 13px/1.3 -apple-system, system-ui, sans-serif; margin: 0; padding: 12px 12px 6px; color: var(--fg); -webkit-user-select: none; cursor: default; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums }
+  .card { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; margin-bottom: 10px }
+  /* --c = graphic color of a meter's level, --ct = its text color */
+  .lv-ok { --c: var(--ok-g); --ct: var(--ok) } .lv-warn { --c: var(--warn-g); --ct: var(--warn) } .lv-bad { --c: var(--bad-g); --ct: var(--bad) }
+  /* --fc/--fct = forecast colors: amber if the limit comes before reset, red if under 30 min, neutral otherwise */
+  .fc-warn { --fc: var(--warn-g); --fct: var(--warn) } .fc-bad { --fc: var(--bad-g); --fct: var(--bad) } .fc-none { --fc: var(--faint); --fct: var(--dim) }
+
+  header { display:flex; align-items:baseline; gap:8px; margin-bottom: 12px }
+  header b { font-size: 13px; font-weight: 600; flex:1 }
+  .pill { font-size: 11px; color: var(--dim) }
+
+  svg { display:block; flex:none }
+  .track { stroke: var(--track) }
+  .arc { stroke: var(--c); transition: stroke-dashoffset .5s ease-out, stroke .3s }
+  .tick { stroke: var(--fg); opacity: .75; stroke-linecap: butt }
+  .hero { display:flex; align-items:center; gap:14px }
+  .hero svg { width: 64px; height: 64px }
+  .hero .num { font-size: 22px; font-weight: 600; fill: var(--fg); text-anchor: middle }
+  .hero .num tspan { font-size: 11px; font-weight: 500; fill: var(--dim) }
+  .info { min-width:0; flex:1 }
+  .label { font-size: 14px; font-weight: 600 }
+  .sub { font-size: 12px; color: var(--dim); margin-top: 1px }
+  .fc { font-size: 12px; margin-top: 3px; color: var(--warn); font-weight: 500 }
+  .fc.soon { color: var(--bad); font-weight: 600 }
+
+  .rows { margin-top: 12px; border-top: 1px solid var(--sep) }
+  .row { display:flex; align-items:center; gap:10px; padding: 7px 0; border-bottom: 1px solid var(--sep) }
+  .rows > :last-child { border-bottom: 0; padding-bottom: 0 }
+  .row svg { width: 26px; height: 26px }
+  .row .info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .row .label { font-size: 13px; font-weight: 500 }
+  .row .sub, .row .fc { display: inline; margin: 0 0 0 6px }
+  .row .rp { font-size: 13px; font-weight: 600; white-space: nowrap }
+  .click { cursor: pointer }
+  .click:focus-visible { outline: 2px solid var(--faint); outline-offset: 2px }
+  .chev { display:inline-block; margin-left:6px; color: var(--dim); font-weight: 400; transition: transform .15s }
+  .open .chev { transform: rotate(90deg) }
+
+  /* Runway panel (expanded meter) */
+  .detail { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--sep) }
+  .rows .detail { margin-top: 0; padding-bottom: 12px; border-top: 0; border-bottom: 1px solid var(--sep) }
+  .dh { display:flex; align-items:center; justify-content:space-between; gap: 8px; min-height: 20px }
+  .dh h4 { margin:0; font-size: 12px; font-weight: 600 }
+  .verdict { font-size: 12px; line-height: 1.4; color: var(--fg2); margin: 3px 0 2px }
+  .verdict b { font-weight: 600; color: var(--fct) }
+  .seg { display:flex; background: var(--track); border-radius: 6px; padding: 1px }
+  .seg button { width:auto; height: 18px; padding: 0 8px; font: inherit; font-size: 11px; color: var(--dim); border-radius: 5px }
+  .seg button.on { background: var(--solid); color: var(--fg); box-shadow: 0 0 0 .5px var(--edge), 0 1px 1px rgba(0,0,0,.08) }
+  .seg button.on:hover { background: var(--solid) }
+  .chart { position: relative; margin-top: 4px }
+  .chart svg { overflow: visible }
+  .legend { display:flex; gap: 12px; font-size: 11px; color: var(--dim); align-items:center; margin-top: 4px }
+  .legend i { display:inline-block; width: 14px; height: 0; border-top: 1.75px solid var(--c); vertical-align: middle; margin-right: 4px }
+  .legend i.proj { border-top: 1.75px dashed var(--fc) }
+  .legend i.even { border-top: 1.5px dotted var(--dim) }
+  .ax { font-size: 10.5px; fill: var(--dim) }
+  .ax.strong { fill: var(--fg); font-weight: 600 }
+  .grid { stroke: var(--grid); shape-rendering: crispEdges }
+  .base { stroke: var(--sep); shape-rendering: crispEdges }
+  .axtick { stroke: var(--dim); opacity: .5; shape-rendering: crispEdges }
+  .limit { stroke: var(--fg); opacity: .35; shape-rendering: crispEdges }
+  .future { fill: var(--fg); opacity: .025 }
+  .area { fill: var(--c); opacity: .16 }
+  .line { stroke: var(--c); stroke-width: 1.75; fill: none; stroke-linejoin: round; stroke-linecap: round }
+  .pace { stroke: var(--dim); opacity: .6; stroke-dasharray: 2 3; fill: none }
+  .proj { stroke: var(--fc); stroke-width: 1.5; stroke-dasharray: 4 3; fill: none }
+  .band { fill: var(--fc); opacity: .09 }
+  .hatch-line { stroke: var(--bad-g); opacity: .28 }
+  .outlbl { font-size: 10.5px; fill: var(--bad); font-weight: 500; text-anchor: middle }
+  .outlbl.sm { font-weight: 400 }
+  .callout { font-size: 11px; font-weight: 600; fill: var(--fct) }
+  .callout.quiet { fill: var(--dim); font-weight: 500 }
+  .pdot { fill: var(--fc); stroke: var(--solid); stroke-width: 1.5 }
+  .dot { fill: var(--c); stroke: var(--solid); stroke-width: 1.5 }
+  .rd { fill: var(--c) }
+  .thr { fill: var(--solid); stroke: var(--fg2); stroke-width: 1.25 }
+  .thrl { font-size: 9.5px; fill: var(--dim) }
+  .nowl { stroke: var(--fg); opacity: .35; stroke-dasharray: 1 2 }
+  .hl { stroke: var(--fg); opacity: .4 }
+  .tip { position:absolute; pointer-events:none; background: var(--tip); color: var(--tipfg); font-size: 11.5px; padding: 5px 8px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 4px 14px rgba(0,0,0,.14); border: .5px solid var(--edge); white-space: nowrap; line-height: 1.35 }
+  .tip b { font-weight: 600 } .tip span { color: var(--dim) }
+  .stats { display:grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0 12px }
+  .stat { background: var(--track); border-radius: 8px; padding: 6px 9px 7px; min-width: 0 }
+  .stat .k { font-size: 11px; color: var(--dim) }
+  .stat .v { font-size: 16px; font-weight: 600; margin-top: 1px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .stat .v.c { color: var(--fct) }
+  .stat .x { font-size: 11px; color: var(--dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .bd h4 { margin: 0 0 7px; font-size: 12px; font-weight: 600 } .bd h4 span { font-weight: 400; color: var(--dim) }
+  .stack { display:flex; height: 8px; gap: 2px; border-radius: 4px; overflow: hidden }
+  .s1 { background: var(--p1) } .s2 { background: var(--p2) } .s3 { background: var(--p3) } .s4 { background: var(--p4) }
+  .leg2 { display:flex; flex-wrap: wrap; column-gap: 14px; row-gap: 3px; margin-top: 7px; font-size: 12px }
+  .leg2 div { display:flex; align-items:center; gap: 5px; min-width: 0 }
+  .leg2 .n { white-space:nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px } .leg2 .sh { color: var(--dim) }
+  .sw { width: 8px; height: 8px; border-radius: 2px; flex:none }
+
+  .set { display:flex; align-items:center; justify-content:space-between; padding: 9px 0; border-bottom: 1px solid var(--sep); gap: 10px }
+  .set:last-child { border-bottom: 0 }
+  .set .name { font-size: 13px; white-space: nowrap }
+  .set.stack { flex-direction: column; align-items: flex-start; gap: 8px; height: auto; overflow: visible; border-radius: 0 }
+  .desc { font-size: 11.5px; color: var(--dim); margin-top: 2px; line-height: 1.35; white-space: normal }
+  .seterr { color: var(--bad); font-size: 12px; padding: 6px 0 }
+  .chips { display:flex; gap:4px; flex-wrap: wrap }
+  .chip { width:auto; height:24px; padding: 0 9px; border-radius: 12px; font-size: 12px; background: var(--track); color: var(--fg); font-family: inherit }
+  .chip.on { background: var(--fg); color: var(--solid) }
+  .switch { width: 36px; height: 20px; border-radius: 10px; background: var(--track); position: relative; padding: 0; flex:none }
+  .switch::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s }
+  .switch.on { background: var(--ok-g) } .switch.on::after { transform: translateX(16px) }
+  .switch:hover { background: var(--track) } .switch.on:hover { background: var(--ok-g) }
+  button.action { width:auto; height:28px; padding: 0 12px; margin-top: 10px; background: var(--fg); color: var(--card-solid); border-radius: 7px; font: inherit; font-weight: 500 }
+  button.action:disabled { opacity: .5 }
+  button.action:hover { background: var(--fg); color: var(--card-solid) }
+  .note { margin-top: 12px; padding: 7px 9px; border-radius: 8px; background: var(--track); color: var(--warn); font-size: 12px; line-height: 1.35 }
+  .msg { line-height: 1.45; color: var(--dim); font-size: 12.5px }
+  .msg.err { color: var(--bad) }
+  .title { font-size: 14px; font-weight: 600; margin-bottom: 4px }
+  .skel .track { stroke: var(--track) }
+  .bar { height: 10px; border-radius: 5px; background: var(--track) }
+
+  footer { display:flex; justify-content:space-between; align-items:center; padding: 0 2px; height: 28px }
+  footer small { color: var(--dim); font-size: 11.5px }
+  footer small.warn { color: var(--warn); font-weight: 500 }
+  .btns { display:flex; gap:2px }
+  button { background: none; color: var(--dim); border:0; border-radius:6px; width:26px; height:24px; display:grid; place-items:center; padding:0 }
+  button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+  button:hover { background: var(--hover); color: var(--fg) }
+  @media (prefers-reduced-motion: reduce) { .arc, .chev, .switch::after { transition: none } }
+</style>
+<div id="app"></div>
+<footer><small id="time">Loading…</small><span class="btns"><button id="r" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M12.5 1.5v3h-3"/></svg></button><button id="gear" title="Settings" aria-label="Settings"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3"/></svg></button><button id="more" title="Menu" aria-label="Menu"><svg viewBox="0 0 16 16" style="fill:currentColor;stroke:none"><circle cx="3" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="13" cy="8" r="1.2"/></svg></button></span></footer>
+<script>
+// DOM is built with createElement/textContent (never innerHTML), so provider text can't inject markup.
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, cls, text, kids = [], ns) {
+  const e = ns ? document.createElementNS(NS, tag) : document.createElement(tag);
+  if (cls) e.setAttribute("class", cls);
+  if (text !== undefined) e.textContent = text;
+  kids.forEach((k) => k != null && e.append(k));
+  return e;
+}
+// SVG element with attributes, appended to parent.
+function s(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  if (parent) parent.append(e);
+  return e;
+}
+const MIN = 60000, H = 3600000, D = 86400000;
+const clamp = (v, a = 0, b = 100) => Math.min(b, Math.max(a, v));
+const level = (p) => p >= 85 ? "bad" : p >= 60 ? "warn" : "ok";
+const pathD = (pts) => pts.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join("");
+
+function dur(m) {
+  m = Math.round(m);
+  if (m < 1) return "<1m";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h >= 24) return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h / 24}d`;
+  return r ? `${h}h ${r}m` : `${h}h`;
+}
+function countdown(iso) {
+  if (!iso) return "";
+  const m = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / MIN));
+  return m < 1 ? "Resets now" : "Resets in " + dur(m);
+}
+// Time formats follow the user's locale.
+const tfmt = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const hfmt = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric" });
+const dname = (t) => new Date(t).toLocaleDateString([], { weekday: "short" });
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+const dtfmt = (t) => (sameDay(t, Date.now()) ? "" : dname(t) + " ") + tfmt(t);
+// Burn rates: weekly meters burning slowly read better per day.
+const rateUnit = (m) => (m.windowMinutes > 600 && m.forecast && m.forecast.ratePerHour < 2 ? "day" : "h");
+const fmtRate = (r, unit) => unit === "day" ? Math.round(r * 24) + "%/day" : (r < 10 ? (Math.round(r * 10) / 10).toFixed(r < 0.05 ? 0 : 1) : Math.round(r)) + "%/h";
+
+// Forecast line on rings: only speak up when the limit will be hit before the reset.
+function forecastLine(m, p) {
+  const f = m.forecast;
+  if (f && f.hitsBeforeReset && f.minutesToLimit != null && p < 100)
+    return el("div", "fc" + (f.minutesToLimit < 30 ? " soon" : ""), "Runs out in ~" + dur(f.minutesToLimit));
+  return null;
+}
+
+const shown = new Map(); // last percent drawn per ring, so updates ease from the old value
+let data = null, refreshing = false, notifyAt = [];
+
+function ring(key, p, sw, withNum, pace = null) {
+  const r = (100 - sw) / 2, C = 2 * Math.PI * r;
+  const svg = s("svg", { viewBox: "0 0 100 100" });
+  s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "track" }, svg);
+  const arc = s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "arc", "stroke-linecap": "round", "stroke-dasharray": C, transform: "rotate(-90 50 50)" }, svg);
+  const off = (v) => C * (1 - Math.max(v, 0.5) / 100);
+  arc.setAttribute("stroke-dashoffset", off(shown.get(key) ?? 0));
+  requestAnimationFrame(() => requestAnimationFrame(() => arc.setAttribute("stroke-dashoffset", off(p))));
+  shown.set(key, p);
+  if (pace !== null) { // where usage "should" be if spread evenly across the window
+    const a = pace * 2 * Math.PI, inner = r - sw / 2 - 1.5, outer = r + sw / 2 + 1.5;
+    s("line", { x1: 50 + inner * Math.sin(a), y1: 50 - inner * Math.cos(a), x2: 50 + outer * Math.sin(a), y2: 50 - outer * Math.cos(a), class: "tick", "stroke-width": withNum ? 2 : 5 }, svg);
+  }
+  if (withNum) { const t = s("text", { x: 50, y: 58, class: "num" }, svg, String(Math.round(p))); s("tspan", {}, t, "%"); }
+  return svg;
+}
+
+const windowStart = (m) => (m.resetsAt && m.windowMinutes ? Date.parse(m.resetsAt) - m.windowMinutes * MIN : null);
+// How far through the quota window we are (0..1). The tick on each ring sits here.
+function paceOf(m) {
+  const t0 = windowStart(m);
+  return t0 === null ? null : clamp((Date.now() - t0) / (m.windowMinutes * MIN), 0, 1);
+}
+// Readings that belong to this window, sorted and sane.
+function readings(m) {
+  const t0 = windowStart(m);
+  if (!Array.isArray(m.spark)) return [];
+  return m.spark.filter((q) => Array.isArray(q) && Number.isFinite(q[0]) && Number.isFinite(q[1]) && (t0 === null || q[0] >= t0 - 5 * MIN))
+    .map(([t, v]) => [t, clamp(v)]).sort((a, b) => a[0] - b[0]);
+}
+const hasWindow = (m) => windowStart(m) !== null && !isNaN(windowStart(m));
+const hasChart = (m) => hasWindow(m) && readings(m).length >= 2;
+const hasDetails = (m) => hasWindow(m) || (Array.isArray(m.breakdown) && m.breakdown.length > 0);
+
+// When the meter hits 100%: now if already there, else per forecast (relative to when the reading was taken).
+function hitAt(m, asOf) {
+  if (clamp(m.usedPercent) >= 100) return Date.now();
+  const f = m.forecast;
+  return f && f.hitsBeforeReset && f.minutesToLimit != null ? asOf + f.minutesToLimit * MIN : null;
+}
+const fcClass = (m) => {
+  if (clamp(m.usedPercent) >= 100) return "fc-bad";
+  const f = m.forecast;
+  return f && f.hitsBeforeReset && f.minutesToLimit != null ? (f.minutesToLimit < 30 ? "fc-bad" : "fc-warn") : "fc-none";
+};
+const projectedAt = (m, asOf, t) => clamp(m.usedPercent + ((m.forecast ? m.forecast.ratePerHour : 0) * (t - asOf)) / H);
+
+// x-axis ticks: hours for short spans, every 6h for ~a day, midnights (labelled with the day) for weeks.
+function timeTicks(t0, t1) {
+  const out = [], span = t1 - t0, d = new Date(t0);
+  if (span <= 12 * H) {
+    const step = span <= 6 * H ? 1 : 2;
+    d.setMinutes(0, 0, 0);
+    for (let t = d.getTime() + H; t < t1; t += H) if (new Date(t).getHours() % step === 0) out.push({ t, label: hfmt(t) });
+  } else if (span <= 48 * H) {
+    d.setMinutes(0, 0, 0);
+    for (let t = d.getTime() + H; t < t1; t += H) {
+      const hr = new Date(t).getHours();
+      if (hr % 6 === 0) out.push({ t, label: hr === 0 ? dname(t) : hfmt(t) });
+    }
+  } else {
+    d.setHours(24, 0, 0, 0);
+    for (let t = d.getTime(); t < t1; t += D) out.push({ t, label: dname(t), day: true });
+  }
+  return out;
+}
+
+let chartSeq = 0; // unique ids for SVG <defs> when several charts are open
+// The Runway chart: the quota window on a time axis, actual usage, projection, limit hit and the locked-out stretch.
+function runway(m, W, zoomed, asOf) {
+  const now = Date.now(), f = m.forecast, p = clamp(m.usedPercent);
+  const ws = windowStart(m), reset = Date.parse(m.resetsAt), span = reset - ws;
+  const hit = hitAt(m, asOf);
+  let t0 = ws, t1 = reset;
+  if (zoomed) { // last 24h + the near future (up to a bit past the limit, else 12h)
+    t0 = Math.max(ws, now - 24 * H);
+    t1 = Math.min(reset, now + (hit ? clamp(hit - now + 2 * H, 3 * H, 12 * H) : 12 * H));
+  }
+  const HT = 156, mt = 22, mb = 22, mr = 36, PW = W - mr;
+  const x = (t) => ((t - t0) / (t1 - t0)) * PW;
+  // the reading the projection starts from (when it was measured)
+  const pts = readings(m);
+  const cur = [Math.min(asOf, now), p];
+  // usedPercent is the latest measurement: it ends the line (replacing a reading taken at about the same time)
+  if (pts.length && cur[0] - pts[pts.length - 1][0] <= MIN) pts[pts.length - 1] = cur; else pts.push(cur);
+  // zoomed: the y-axis also starts near the lowest reading in view, so the last stretch to 100% is visible
+  const lo = zoomed ? clamp(Math.floor((Math.min(p, ...pts.filter(([t]) => t >= t0).map((q) => q[1])) - 8) / 10) * 10, 0, 70) : 0;
+  const y = (v) => mt + (1 - (v - lo) / (100 - lo)) * (HT - mt - mb);
+  const Y0 = y(lo), yr = (fr) => y(lo + fr * (100 - lo)); // baseline; fraction of the plot height
+  const id = "q" + ++chartSeq;
+  const wrap = el("div", "chart");
+  const svg = s("svg", { width: W, height: HT, viewBox: `0 0 ${W} ${HT}`, role: "img" }, wrap);
+  const defs = s("defs", {}, svg);
+  const pat = s("pattern", { id: id + "h", width: 5, height: 5, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+  s("line", { x1: 0, y1: 0, x2: 0, y2: 5, class: "hatch-line", "stroke-width": 2 }, pat);
+  s("rect", { x: 0, y: 0, width: PW, height: Y0 }, s("clipPath", { id: id + "c" }, defs));
+  const plot = s("g", { "clip-path": `url(#${id}c)` }, svg);
+
+  const xn = x(now);
+
+  // background: future tint, gridlines at 0/50/100, labels, even pace
+  if (xn < PW) s("rect", { x: Math.max(0, xn), y: mt, width: PW - Math.max(0, xn), height: Y0 - mt, class: "future" }, svg);
+  s("line", { x1: 0, x2: PW, y1: yr(0.5), y2: yr(0.5), class: "grid" }, svg);
+  s("line", { x1: 0, x2: PW, y1: Y0, y2: Y0, class: "base" }, svg);
+  s("line", { x1: 0, x2: PW, y1: y(100), y2: y(100), class: "limit" }, svg);
+  [[100, "100%"], [(lo + 100) / 2, (lo + 100) / 2 + "%"], [lo, lo ? lo + "%" : "0"]].forEach(([v, t]) => s("text", { x: PW + 6, y: y(v) + 3.5, class: "ax" }, svg, t));
+  const even = (t) => ((t - ws) / span) * 100;
+  s("line", { x1: x(t0), y1: y(even(t0)), x2: x(t1), y2: y(even(t1)), class: "pace" }, plot);
+
+  // projection band (a heuristic: 0.7x..1.35x the current rate)
+  const rate = f && f.ratePerHour > 0 ? f.ratePerHour : 0;
+  if (rate && p < 100) {
+    const up = [], lo = [];
+    for (let i = 0; i <= 48; i++) {
+      const t = cur[0] + ((t1 - cur[0]) * i) / 48;
+      up.push([x(t), y(clamp(p + (rate * 1.35 * (t - cur[0])) / H))]);
+      lo.push([x(t), y(clamp(p + (rate * 0.7 * (t - cur[0])) / H))]);
+    }
+    s("path", { d: pathD(up.concat(lo.reverse())) + "Z", class: "band" }, plot);
+  }
+  // locked out from the hit until the reset
+  if (hit && hit < t1) {
+    const xa = Math.max(0, x(hit)), wOut = PW - xa;
+    s("rect", { x: xa, y: y(100), width: wOut, height: Y0 - y(100), fill: `url(#${id}h)` }, svg);
+    const cx = (xa + PW) / 2, left = dur((reset - Math.max(hit, now)) / MIN);
+    if (wOut >= 92) { s("text", { x: cx, y: yr(0.32), class: "outlbl" }, svg, "Out of quota"); s("text", { x: cx, y: yr(0.32) + 13, class: "outlbl sm" }, svg, "for " + left); }
+    else if (wOut >= 40) { s("text", { x: cx, y: yr(0.32), class: "outlbl" }, svg, "Out"); s("text", { x: cx, y: yr(0.32) + 13, class: "outlbl sm" }, svg, left); }
+  }
+
+  // actual usage: drawn as measured (straight segments, points visible when sparse)
+  const xy = pts.map(([t, v]) => [x(t), y(v)]);
+  s("path", { d: pathD(xy) + `L${xy[xy.length - 1][0].toFixed(1)} ${Y0}L${xy[0][0].toFixed(1)} ${Y0}Z`, class: "area" }, plot);
+  s("path", { d: pathD(xy), class: "line" }, plot);
+  const visible = pts.filter(([t]) => t >= t0 && t <= t1);
+  if (visible.length <= 16) visible.forEach(([t, v]) => s("circle", { cx: x(t), cy: y(v), r: visible.length <= 4 ? 2.6 : 1.9, class: "rd" }, svg));
+
+  // projection line + where it lands
+  let endP = null;
+  if (hit && p < 100) {
+    s("path", { d: pathD([[x(cur[0]), y(p)], [x(hit), y(100)]]), class: "proj" }, plot);
+    s("circle", { cx: x(hit), cy: y(100), r: 3.5, class: "pdot" }, svg);
+    const xh = x(hit), label = "Runs out ~" + dtfmt(hit), lw = label.length * 6;
+    const anchor = xh > PW - lw / 2 ? "end" : xh < lw / 2 ? "start" : "middle";
+    s("text", { x: anchor === "end" ? PW : anchor === "start" ? 0 : xh, y: y(100) - 8, class: "callout", "text-anchor": anchor }, svg, label);
+  } else if (f && p < 100) {
+    endP = projectedAt(m, cur[0], t1);
+    s("path", { d: pathD([[x(cur[0]), y(p)], [PW, y(endP)]]), class: "proj" }, plot);
+    s("circle", { cx: PW, cy: y(endP), r: 3, class: "pdot" }, svg);
+    if (t1 === reset) { // label next to the end dot, wherever it doesn't cross the projection or even-pace line
+      const label = "~" + Math.round(endP) + "% at reset", x1 = PW - 8, x0 = x1 - label.length * 6;
+      const tAt = (px) => t0 + (px / PW) * (t1 - t0);
+      const lines = [(t) => y(projectedAt(m, cur[0], t)), (t) => y(clamp(even(t)))];
+      const clear = (by) => [x0, (x0 + x1) / 2, x1].every((px) => lines.every((ln) => { const ly = ln(tAt(px)); return ly < by - 13 || ly > by + 4; }));
+      const by = [y(endP) - 9, y(endP) + 18, y(endP) + 32, y(endP) - 24].find((b) => b > mt + 10 && b < Y0 - 2 && clear(b));
+      if (by !== undefined) s("text", { x: x1, y: by, class: "callout quiet", "text-anchor": "end" }, svg, label);
+    }
+  }
+
+  // notification thresholds crossed in view
+  notifyAt.forEach((n) => {
+    for (let i = 1; i < pts.length; i++) {
+      const [ta, a] = pts[i - 1], [tb, b] = pts[i];
+      if (a < n && b >= n) {
+        const t = ta + ((n - a) / (b - a)) * (tb - ta);
+        if (t < t0 || t > t1) break;
+        s("circle", { cx: x(t), cy: y(n), r: 2.6, class: "thr" }, svg);
+        if (x(t) > 60) s("text", { x: x(t) - 5, y: y(n) - 5, class: "thrl", "text-anchor": "end" }, svg, n + "% alert");
+        break;
+      }
+    }
+  });
+  if (xn >= 0 && xn <= PW) s("line", { x1: xn, x2: xn, y1: y(100), y2: Y0, class: "nowl" }, svg);
+  s("circle", { cx: x(cur[0]), cy: y(p), r: 3.5, class: "dot" }, svg);
+
+  // x axis: start · ticks · now · end, dropping labels that would collide
+  const long = t1 - t0 > 12 * H, ay = HT - 6;
+  const when = (t) => (long ? dname(t) + " " + hfmt(t) : tfmt(t));
+  const st = { x: 0, label: when(t0), anchor: "start" };
+  const nw = { x: xn, label: "now", anchor: "middle", strong: true };
+  const en = { x: PW, label: t1 === reset ? "Resets " + when(t1) : when(t1), anchor: "end" };
+  const ext = (o) => { const w = o.label.length * 5.6; return o.anchor === "start" ? [o.x, o.x + w] : o.anchor === "end" ? [o.x - w, o.x] : [o.x - w / 2, o.x + w / 2]; };
+  const hits = (a, b) => { const A = ext(a), B = ext(b); return A[1] > B[0] - 6 && A[0] < B[1] + 6; };
+  let fixed = t1 === reset ? [st, nw, en] : [st, nw]; // zoomed: ticks mark the future
+  if (hits(nw, en)) { nw.anchor = "end"; nw.x -= 3; }
+  if (hits(nw, en)) en.label = when(t1);
+  if (hits(nw, en)) fixed = fixed.filter((o) => o !== en);
+  if (hits(st, nw)) fixed = fixed.filter((o) => o !== st);
+  const taken = fixed.map(ext);
+  timeTicks(t0, t1).forEach((tk) => {
+    const xx = x(tk.t);
+    s("line", { x1: xx, x2: xx, y1: Y0, y2: Y0 + 3, class: "axtick" }, svg);
+    const lx = tk.day ? xx + (x(tk.t + D) - xx) / 2 : xx;
+    const e = ext({ x: lx, label: tk.label, anchor: "middle" });
+    if (e[0] > 0 && e[1] < PW + 4 && !taken.some(([a, b]) => e[1] > a - 12 && e[0] < b + 12)) { taken.push(e); s("text", { x: lx, y: ay, class: "ax", "text-anchor": "middle" }, svg, tk.label); }
+  });
+  fixed.forEach((o) => s("text", { x: o.x, y: ay, class: "ax" + (o.strong ? " strong" : ""), "text-anchor": o.anchor }, svg, o.label));
+
+  // hover: nearest real reading in the past, the projection in the future
+  const tip = el("div", "tip"); tip.style.display = "none"; wrap.append(tip);
+  const hlg = s("g", { style: "display:none" }, svg);
+  const hl = s("line", { y1: y(100), y2: Y0, class: "hl" }, hlg), hd = s("circle", { r: 3, class: "dot" }, hlg);
+  const hide = () => { hlg.style.display = "none"; tip.style.display = "none"; };
+  const line = (strong, rest) => el("div", "", undefined, [el("b", "", strong), el("span", "", rest)]);
+  function hover(px) {
+    const t = t0 + (clamp(px, 0, PW) / PW) * (t1 - t0);
+    let v, rows;
+    if (t <= cur[0]) {
+      const near = pts.reduce((a, b) => (Math.abs(b[0] - t) < Math.abs(a[0] - t) ? b : a));
+      if (near[0] < t0) return hide();
+      v = near[1]; px = x(near[0]);
+      rows = [line(Math.round(v) + "% used", " \u00B7 " + dtfmt(near[0])), el("span", "", "Even pace: " + Math.round(clamp(even(near[0]))) + "%")];
+    } else if (hit && t >= hit) {
+      v = 100; rows = [line("Out of quota", " \u00B7 " + dtfmt(t)), el("span", "", "Resets " + dtfmt(reset))];
+    } else if (f) {
+      v = projectedAt(m, cur[0], t);
+      rows = [line("~" + Math.round(v) + "%", " \u00B7 " + dtfmt(t)), el("span", "", "Projected at current rate")];
+    } else return hide();
+    hd.setAttribute("class", t <= cur[0] ? "dot" : "pdot");
+    hlg.style.display = ""; hl.setAttribute("x1", px); hl.setAttribute("x2", px); hd.setAttribute("cx", px); hd.setAttribute("cy", y(v));
+    tip.replaceChildren(...rows); tip.style.display = "";
+    const tw = tip.offsetWidth;
+    tip.style.left = clamp(px - tw / 2, 0, W - tw) + "px";
+    tip.style.top = (y(v) < 70 ? y(v) + 12 : y(v) - 50) + "px";
+  }
+  const hit_area = s("rect", { x: 0, y: 0, width: PW, height: HT, fill: "transparent" }, svg);
+  hit_area.addEventListener("mousemove", (e) => hover(e.clientX - svg.getBoundingClientRect().left));
+  hit_area.addEventListener("mouseleave", hide);
+  return wrap;
+}
+
+// One calm sentence: when it runs out and what pace would last, or where it'll end up.
+function verdict(m, asOf) {
+  const f = m.forecast, p = clamp(m.usedPercent), reset = Date.parse(m.resetsAt), now = Date.now();
+  const v = el("div", "verdict");
+  if (p >= 100) { v.append(el("b", "", "Limit reached."), " Resets " + dtfmt(reset) + ", in " + dur((reset - now) / MIN) + "."); return v; }
+  if (!f) { v.textContent = "Collecting readings. A forecast appears after about 15 minutes."; return v; }
+  const hit = hitAt(m, asOf);
+  if (hit) {
+    const unit = rateUnit(m), hoursLeft = Math.max((reset - now) / H, 1 / 60);
+    const lasting = (100 - p) / hoursLeft;
+    v.append(el("b", "", "Runs out ~" + dtfmt(hit)), ", " + dur((reset - hit) / MIN) + " before the reset. To last, slow to " + fmtRate(lasting, unit) + " (now " + fmtRate(f.ratePerHour, unit) + ").");
+  } else {
+    const end = Math.round(projectedAt(m, asOf, reset));
+    v.textContent = end >= 99 ? "Close: at this pace you'll reach the limit right around the reset."
+      : "On track: you'll finish at about " + end + "% when it resets.";
+  }
+  return v;
+}
+
+function stats(m, asOf) {
+  const f = m.forecast, p = clamp(m.usedPercent), reset = Date.parse(m.resetsAt), now = Date.now();
+  const evenRate = 100 / (m.windowMinutes / 60), unit = rateUnit(m);
+  const st = (k, v, x, colored) => el("div", "stat", undefined, [el("div", "k", k), el("div", "v" + (colored ? " c" : ""), v), el("div", "x", x)]);
+  const ratio = f ? f.ratePerHour / evenRate : 0;
+  const rate = !f ? st("Burn rate", "\u2014", "collecting data")
+    : st("Burn rate", fmtRate(f.ratePerHour, unit), ratio > 1.15 ? ratio.toFixed(1) + "\u00D7 even pace" : ratio < 0.85 ? "below even pace" : "about even pace");
+  const hit = hitAt(m, asOf);
+  let fc;
+  if (p >= 100) fc = st("Limit", "Reached", "until the reset", true);
+  else if (!f) fc = st("Forecast", "\u2014", "after 15 min");
+  else if (hit) fc = st("Runs out", "~" + dtfmt(hit), dur((reset - hit) / MIN) + " till reset", true);
+  else fc = st("At reset", "~" + Math.round(projectedAt(m, asOf, reset)) + "%", "won't hit the limit");
+  const left = st("Resets in", dur(Math.max(0, reset - now) / MIN), dtfmt(reset));
+  return el("div", "stats", undefined, [rate, fc, left]);
+}
+
+function breakdown(m) {
+  const items = m.breakdown.filter((b) => b.share > 0);
+  const sw = (i) => "s" + Math.min(i + 1, 4);
+  const stack = el("div", "stack", undefined, items.map((b, i) => { const e = el("i", sw(i)); e.style.flex = String(b.share); return e; }));
+  return el("div", "bd", undefined, [
+    el("h4", "", "Where it went ", [el("span", "", "\u00B7 by project folder, share of tokens used")]),
+    stack,
+    el("div", "leg2", undefined, items.map((b, i) => { const n = el("span", "n", b.name); n.title = b.path || b.name;
+      return el("div", "", undefined, [el("i", "sw " + sw(i)), n, el("span", "sh", Math.round(b.share) + "%")]); })),
+  ]);
+}
+
+const open = new Set();   // meters whose Runway panel is expanded
+const zoom = new Map();   // meter key -> "24h" for weekly meters zoomed in
+let pendingCharts = [];   // charts are drawn after insertion, once the width is known
+
+function detail(key, m, asOf) {
+  const d = el("div", "detail lv-" + level(clamp(m.usedPercent)) + " " + fcClass(m));
+  if (!hasWindow(m)) { if (m.breakdown && m.breakdown.length) d.append(breakdown(m)); return d; }
+  const weekly = m.windowMinutes >= 7 * 1440, zoomed = weekly && zoom.get(key) === "24h";
+  const head = el("div", "dh", undefined, [el("h4", "", zoomed ? "Last 24 hours" : "This window")]);
+  if (weekly && hasChart(m)) {
+    const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Chart range");
+    [["Week", null], ["24h", "24h"]].forEach(([label, v]) => {
+      const b = el("button", (zoom.get(key) ?? null) === v ? "on" : "", label);
+      b.setAttribute("aria-pressed", String((zoom.get(key) ?? null) === v));
+      b.onclick = () => { v ? zoom.set(key, v) : zoom.delete(key); render(data); };
+      seg.append(b);
+    });
+    head.append(seg);
+  }
+  d.append(head, verdict(m, asOf));
+  if (hasChart(m)) {
+    const holder = el("div");
+    d.append(holder, el("div", "legend", undefined, [el("span", "", undefined, [el("i"), "used"]),
+      ...(m.forecast ? [el("span", "", undefined, [el("i", "proj"), "projected"])] : []), el("span", "", undefined, [el("i", "even"), "even pace"])]));
+    pendingCharts.push(() => holder.append(runway(m, holder.clientWidth, zoomed, asOf)));
+  }
+  d.append(stats(m, asOf));
+  if (m.breakdown && m.breakdown.length) d.append(breakdown(m));
+  return d;
+}
+
+// Click (or Enter/Space) a meter to expand its Runway panel.
+function expandable(node, key, m, chevParent) {
+  if (!hasDetails(m)) return node;
+  node.classList.add("click");
+  node.tabIndex = 0; node.setAttribute("role", "button"); node.setAttribute("aria-expanded", String(open.has(key)));
+  chevParent.append(el("span", "chev", "\u203A"));
+  if (open.has(key)) node.classList.add("open");
+  const toggle = () => { open.has(key) ? open.delete(key) : open.add(key); render(data); };
+  node.onclick = toggle;
+  node.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+  return node;
+}
+
+function hero(id, m) {
+  const p = clamp(m.usedPercent);
+  const info = el("div", "info", undefined, [el("div", "label", m.label), el("div", "sub", countdown(m.resetsAt)), forecastLine(m, p)]);
+  const node = el("div", "hero lv-" + level(p), undefined, [ring(id + m.label, p, 7, true, paceOf(m)), info]);
+  return expandable(node, id + m.label, m, info.firstChild);
+}
+
+function row(id, m) {
+  const p = clamp(m.usedPercent), fc = forecastLine(m, p);
+  const info = el("div", "info", undefined, [el("span", "label", m.label), fc ?? (m.resetsAt ? el("span", "sub", countdown(m.resetsAt).replace("Resets", "resets")) : null)]);
+  const rp = el("div", "rp", Math.round(p) + "%");
+  const node = el("div", "row lv-" + level(p), undefined, [ring(id + m.label, p, 14, false, paceOf(m)), info, rp]);
+  return expandable(node, id + m.label, m, rp);
+}
+
+function provider(p) {
+  const header = el("header", "", undefined, [el("b", "", p.name), ...(p.plan ? [el("span", "pill", p.plan)] : [])]);
+  const card = el("div", "card", undefined, [header]);
+  if (p.status === "ok" && p.meters.length) {
+    // the time the current values were measured (stale data is as old as its last reading)
+    const asOf = (m) => { const r = readings(m); return p.stale ? (r.length ? r[r.length - 1][0] : data.lastOkAt || Date.now()) : Math.min(Date.now(), data.updatedAt || Date.now()); };
+    const [first, ...rest] = p.meters;
+    card.append(hero(p.id, first));
+    if (open.has(p.id + first.label) && hasDetails(first)) card.append(detail(p.id + first.label, first, asOf(first)));
+    if (rest.length) card.append(el("div", "rows", undefined, rest.flatMap((m) => {
+      const key = p.id + m.label;
+      return open.has(key) && hasDetails(m) ? [row(p.id, m), detail(key, m, asOf(m))] : [row(p.id, m)];
+    })));
+    if (p.stale) card.append(el("div", "note", (p.message ?? "Couldn't refresh.") + " Showing last known values."));
+  } else {
+    card.append(el("div", "msg" + (p.status === "error" ? " err" : ""), p.message ?? "No data."));
+    if (p.action === "refresh-login") card.append(actionButton(p));
+  }
+  return card;
+}
+
+// "Refresh login": asks Claude Code itself to renew its login (it does so whenever it makes a request).
+function actionButton(p) {
+  const b = el("button", "action", "Refresh login");
+  const hint = el("div", "sub", "Sends one tiny message through Claude Code. Uses a negligible amount of quota.");
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "Refreshing\u2026";
+    const r = await window.quota.action(p.id, p.action);
+    if (r && !r.ok) { b.disabled = false; b.textContent = "Refresh login"; hint.textContent = r.message ?? "Couldn't refresh."; hint.style.color = "var(--bad)"; }
+  };
+  return el("div", "", undefined, [b, hint]);
+}
+
+function skeleton() {
+  const svg = s("svg", { viewBox: "0 0 100 100" });
+  s("circle", { cx: 50, cy: 50, r: 46.5, fill: "none", "stroke-width": 7, class: "track" }, svg);
+  const lines = el("div", "info", undefined, [el("div", "bar"), el("div", "bar")]);
+  lines.children[0].style.width = "60%"; lines.children[1].style.cssText = "width:40%;margin-top:8px";
+  return el("div", "card skel", undefined, [el("div", "hero", undefined, [svg, lines])]);
+}
+
+// Footer: calm when fresh, amber when the data is old (and when we'll try again).
+function setTime() {
+  const t = document.getElementById("time");
+  const now = Date.now();
+  const age = data && data.lastOkAt ? now - data.lastOkAt : 0;
+  const old = age > 5 * 60000;
+  let text = "Loading…";
+  if (refreshing) text = "Updating…";
+  else if (data && data.updatedAt) {
+    text = old ? "Last updated " + dur(age / 60000) + " ago"
+      : data.lastOkAt ? "Updated " + tfmt(data.lastOkAt) : "Not updated yet";
+    if (old && data.nextRefreshAt > now) text += " \u00B7 retry in " + dur((data.nextRefreshAt - now) / 60000);
+  }
+  t.textContent = text;
+  t.classList.toggle("warn", !refreshing && Boolean(old || (data && data.updatedAt && !data.lastOkAt)));
+}
+
+// Dev hooks via QUOTAPUS_VIEW: "settings", "expand" (first two meters), "expand:2" or "expand:1,2:24h".
+const hash = location.hash.slice(1).split(":");
+let view = hash[0] === "settings" ? "settings" : "main";
+let pendingExpand = hash[0] === "expand" ? { idx: hash[1] ? hash[1].split(",").map(Number) : [0, 1], zoom: hash[2] === "24h" } : null;
+
+function toggle(name, on, onChange, desc) {
+  const b = el("button", "switch" + (on ? " on" : "")); b.setAttribute("role", "switch"); b.setAttribute("aria-checked", String(on));
+  b.setAttribute("aria-label", name); b.onclick = () => onChange(!on);
+  const label = el("div", "", undefined, [el("div", "name", name), ...(desc ? [el("div", "desc", desc)] : [])]);
+  return el("div", "set", undefined, [label, b]);
+}
+function chips(name, options) {
+  return el("div", "set stack", undefined, [el("span", "name", name), el("div", "chips", undefined,
+    options.map((o) => { const b = el("button", "chip" + (o.on ? " on" : ""), o.label); b.onclick = o.click; return b; }))]);
+}
+async function renderSettings(error) {
+  const s = await window.quota.getSettings();
+  notifyAt = s.notifyAt || [];
+  const save = async (patch) => { const r = await window.quota.setSettings(patch); renderSettings(r && r.error); };
+  const app = document.getElementById("app");
+  app.replaceChildren(el("div", "card", undefined, [
+    el("div", "title", "Settings"),
+    ...(error ? [el("div", "seterr", error)] : []),
+    toggle("Read limits from Claude Code", s.claudeStatusLine, (v) => save({ claudeStatusLine: v }),
+      "Adds a status line to Claude Code's settings so quotapus needn't call Anthropic's API. Avoids rate limits. Your existing status line keeps working."),
+    toggle("Percentage in menu bar", s.showPercentInMenuBar, (v) => save({ showPercentInMenuBar: v })),
+    toggle("Usage notifications", s.notifications, (v) => save({ notifications: v })),
+    toggle("Launch at login", s.launchAtLogin, (v) => save({ launchAtLogin: v })),
+    chips("Refresh every", [5, 10, 15].map((m) => ({ label: m + " min", on: s.refreshSeconds === m * 60, click: () => save({ refreshSeconds: m * 60 }) }))),
+    chips("Notify at", [50, 70, 80, 90, 95].map((t) => ({ label: t + "%", on: s.notifyAt.includes(t),
+      click: () => save({ notifyAt: s.notifyAt.includes(t) ? s.notifyAt.filter((x) => x !== t) : [...s.notifyAt, t] }) }))),
+  ]));
+  document.getElementById("time").textContent = "";
+  window.quota.resize(document.body.scrollHeight);
+}
+
+function render(d) {
+  data = d;
+  if (view === "settings") return renderSettings();
+  if (pendingExpand && d.results && d.results[0]) {
+    const first = d.results[0];
+    pendingExpand.idx.forEach((i) => { const m = first.meters[i]; if (m) { open.add(first.id + m.label); if (pendingExpand.zoom) zoom.set(first.id + m.label, "24h"); } });
+    pendingExpand = null;
+  }
+  const app = document.getElementById("app");
+  pendingCharts = [];
+  const kids = [];
+  if (d.welcome) kids.push(el("div", "card", undefined, [
+    el("div", "title", "Welcome to quotapus"),
+    el("div", "msg", "Quotapus lives in your menu bar. Click the icon to open this panel; right-click it for settings."),
+  ]));
+  if (!d.updatedAt) kids.push(skeleton()); else d.results.forEach((p) => kids.push(provider(p)));
+  app.replaceChildren(...kids);
+  chartSeq = 0;
+  pendingCharts.forEach((draw) => draw());
+  pendingCharts = [];
+  setTime();
+  window.quota.resize(document.body.scrollHeight);
+}
+
+window.quota.getSettings().then((s) => { notifyAt = (s && s.notifyAt) || []; if (data && view === "main") render(data); }).catch(() => {});
+window.quota.get().then(render);
+window.quota.onUpdate(render);
+setInterval(() => data && view === "main" && render(data), 30000); // keep countdowns and "now" fresh without re-fetching
+document.getElementById("r").onclick = async () => {
+  refreshing = true; setTime();
+  try { await window.quota.refresh(); } finally { refreshing = false; setTime(); }
+};
+document.getElementById("gear").onclick = () => { view = view === "settings" ? "main" : "settings"; render(data); };
+window.quota.onOpenSettings(() => { view = "settings"; render(data); });
+document.getElementById("more").onclick = () => window.quota.menu();
+</script>

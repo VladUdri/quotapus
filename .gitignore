@@ -1,0 +1,9 @@
+node_modules
+dist
+.DS_Store
+.cache
+release
+
+# Private working notes (kept locally, never published)
+IDEAS.md
+AGENTS.md
