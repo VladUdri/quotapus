@@ -13,9 +13,10 @@ export function forecast(samples: Sample[], now: number, resetsAt?: string): For
   if (samples.length < 2) return undefined;
   const last = samples[samples.length - 1];
 
-  // Short windows (5h session) -> look back 1h. Long windows (weekly) -> look back 6h.
+  // Short windows (5h session) -> look back 1h. Weekly -> 6h. Monthly (Cursor's billing cycle) -> 24h,
+  // because a few busy hours extrapolated over weeks would cry wolf.
   const untilReset = resetsAt ? Date.parse(resetsAt) - now : Infinity;
-  const lookback = untilReset <= 5.5 * 60 * MIN ? 60 * MIN : 6 * 60 * MIN;
+  const lookback = untilReset <= 5.5 * 60 * MIN ? 60 * MIN : untilReset <= 8 * 1440 * MIN || untilReset === Infinity ? 6 * 60 * MIN : 24 * 60 * MIN;
 
   const recent = samples.filter((s) => s.t >= now - lookback);
   const first = recent[0];

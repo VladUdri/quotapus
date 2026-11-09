@@ -105,7 +105,7 @@ export function createClaude(dataDir: string): Provider {
         headers: { Authorization: `Bearer ${creds.accessToken}`, "anthropic-beta": "oauth-2025-04-20" },
       });
       if (res.status === 401) return result({ status: "error", plan, message: "Claude Code's login has expired (it renews whenever Claude Code is used).", recheckSec: 60, action: "refresh-login" });
-      if (res.status === 429) return result({ status: "error", plan, message: "Rate limited by Anthropic. Tip: turn on \"Read limits from Claude Code\" in settings.", retryAfterSec: parseRetryAfter(res.headers.get("retry-after")) });
+      if (res.status === 429) return result({ status: "error", plan, message: "Anthropic is rate-limiting usage checks. Turning on \"Read limits from Claude Code\" in Settings avoids this.", action: "open-settings", retryAfterSec: parseRetryAfter(res.headers.get("retry-after")) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = (await res.json()) as Record<string, Window | null>;
       const meters: QuotaMeter[] = [];

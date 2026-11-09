@@ -27,7 +27,7 @@ export interface ProviderResult {
   message?: string;    // hint or error text for the user
   hidden?: boolean;       // not set up and not worth showing (e.g. Cursor not installed)
   recheckSec?: number;    // the problem is local and free to re-check soon (e.g. expired login), so skip backoff
-  action?: "refresh-login"; // a button the UI can offer to fix the problem
+  action?: "refresh-login" | "open-settings"; // a button the UI can offer to fix the problem
   retryAfterSec?: number; // set when the provider asked us to slow down (HTTP 429)
   stale?: boolean;     // true = fetch failed, meters are the last known good values
   meters: QuotaMeter[];

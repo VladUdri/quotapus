@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld("quota", {
   getSettings: () => ipcRenderer.invoke("settings:get"),
   setSettings: (p: unknown) => ipcRenderer.invoke("settings:set", p),
   onOpenSettings: (cb: () => void) => ipcRenderer.on("ui:settings", () => cb()),
-  menu: () => ipcRenderer.send("ui:menu"),
+  hide: () => ipcRenderer.send("ui:hide"),
+  quit: () => ipcRenderer.send("ui:quit"),
   resize: (h: number) => ipcRenderer.send("ui:resize", h),
 });

@@ -10,11 +10,12 @@ export interface Config {
   notifyAt: number[];           // % thresholds that trigger a notification
   refreshSeconds: number;
   notified: string[];           // "already warned" keys so we don't nag
+  menuBarMeter: string;         // "<provider id>|<meter label>", "max" = highest, "" = first meter
 }
 
 const defaults: Config = {
   onboarded: false, showPercentInMenuBar: true, notifications: true,
-  notifyAt: [80, 95], refreshSeconds: 300, notified: [],
+  notifyAt: [80, 95], refreshSeconds: 300, notified: [], menuBarMeter: "",
 };
 
 // Lives in ~/Library/Application Support/quotapus, so it survives reinstalls/updates

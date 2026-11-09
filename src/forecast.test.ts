@@ -35,6 +35,13 @@ test("only recent samples count: old burst is ignored", () => {
   assert.equal(f?.minutesToLimit, null);
 });
 
+test("monthly windows look back a full day, not just the last burst", () => {
+  // flat for a day, then +6 in the last 3h: a 6h lookback would see 2 pp/h, the 24h lookback sees ~0.3
+  const samples = [{ t: now - 24 * 60 * min, p: 40 }, { t: now - 3 * 60 * min, p: 40 }, { t: now, p: 46 }];
+  const f = forecast(samples, now, at(20 * 1440));
+  assert.ok(f && f.ratePerHour < 0.5);
+});
+
 test("shouldRecord thins out polls", () => {
   assert.equal(shouldRecord([{ t: now - 2 * min, p: 10 }], now, 10), false);
   assert.equal(shouldRecord([{ t: now - 2 * min, p: 10 }], now, 11), true);

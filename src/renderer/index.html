@@ -3,55 +3,70 @@
 <style>
   /* Text colors (--ok/--warn/--bad) are darker than graphic colors (--*-g) in light mode so text stays readable. */
   :root { --fg:#1d1d1f; --fg2:#3a3a3c; --dim:#6e6e73; --faint:#8e8e93; --track:rgba(0,0,0,.08); --grid:rgba(0,0,0,.07); --card:rgba(255,255,255,.55);
-          --edge:rgba(0,0,0,.07); --sep:rgba(0,0,0,.08); --hover:rgba(0,0,0,.06); --solid:#fff; --tip:#fff; --tipfg:#1d1d1f;
-          --ok:#248a3d; --warn:#b25f00; --bad:#d70015; --ok-g:#34c759; --warn-g:#f5a000; --bad-g:#ff3b30;
+          --edge:rgba(0,0,0,.07); --sep:rgba(0,0,0,.08); --hover:rgba(0,0,0,.06); --hover-soft:rgba(0,0,0,.035); --solid:#fff; --tip:#fff; --tipfg:#1d1d1f;
+          --ok:#248a3d; --warn:#b25f00; --bad:#d70015; --ok-g:#34c759; --warn-g:#f5a000; --bad-g:#ff3b30; --accent:#0a84ff;
           --p1:rgba(29,29,31,.62); --p2:rgba(29,29,31,.40); --p3:rgba(29,29,31,.24); --p4:rgba(29,29,31,.12); }
   @media (prefers-color-scheme: dark) { :root { --fg:#f5f5f7; --fg2:#d1d1d6; --dim:#a1a1a6; --faint:#8e8e93; --track:rgba(255,255,255,.12); --grid:rgba(255,255,255,.08); --card:rgba(255,255,255,.06);
-          --edge:rgba(255,255,255,.09); --sep:rgba(255,255,255,.09); --hover:rgba(255,255,255,.1); --solid:#1c1c1e; --tip:#3a3a3c; --tipfg:#f5f5f7;
-          --ok:#30d158; --warn:#ffb340; --bad:#ff6961; --ok-g:#30d158; --warn-g:#ffb340; --bad-g:#ff6961;
+          --edge:rgba(255,255,255,.09); --sep:rgba(255,255,255,.09); --hover:rgba(255,255,255,.1); --hover-soft:rgba(255,255,255,.05); --solid:#1c1c1e; --tip:#3a3a3c; --tipfg:#f5f5f7;
+          --ok:#30d158; --warn:#ffb340; --bad:#ff6961; --ok-g:#30d158; --warn-g:#ffb340; --bad-g:#ff6961; --accent:#0a84ff;
           --p1:rgba(245,245,247,.70); --p2:rgba(245,245,247,.46); --p3:rgba(245,245,247,.28); --p4:rgba(245,245,247,.14); } }
   * { box-sizing: border-box }
-  body { font: 13px/1.3 -apple-system, system-ui, sans-serif; margin: 0; padding: 12px 12px 6px; color: var(--fg); -webkit-user-select: none; cursor: default; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums }
-  .card { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 14px; margin-bottom: 10px }
+  /* The page fills the window: content scrolls (when there's a lot of it), the footer stays put. */
+  html, body { height: 100% }
+  body { font: 13px/1.3 -apple-system, system-ui, sans-serif; margin: 0; padding: 12px 12px 4px; color: var(--fg); -webkit-user-select: none; cursor: default;
+         -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; overflow: hidden }
+  #app { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0 -12px; padding: 0 12px;
+         -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 10px), transparent) } /* soft edge when content scrolls under the footer */
+  #content { display: flow-root }
+  .card { background: var(--card); border: 1px solid var(--edge); border-radius: 12px; padding: 12px 14px 10px; margin-bottom: 10px }
   /* --c = graphic color of a meter's level, --ct = its text color */
   .lv-ok { --c: var(--ok-g); --ct: var(--ok) } .lv-warn { --c: var(--warn-g); --ct: var(--warn) } .lv-bad { --c: var(--bad-g); --ct: var(--bad) }
   /* --fc/--fct = forecast colors: amber if the limit comes before reset, red if under 30 min, neutral otherwise */
   .fc-warn { --fc: var(--warn-g); --fct: var(--warn) } .fc-bad { --fc: var(--bad-g); --fct: var(--bad) } .fc-none { --fc: var(--faint); --fct: var(--dim) }
+  .st-warn { color: var(--warn); font-weight: 500 } .st-bad { color: var(--bad); font-weight: 600 }
 
-  header { display:flex; align-items:baseline; gap:8px; margin-bottom: 12px }
-  header b { font-size: 13px; font-weight: 600; flex:1 }
-  .pill { font-size: 11px; color: var(--dim) }
+  /* Icons (Lucide, ISC license): stroked, inherit the text color */
+  .ic { display: block; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none }
+
+  header { display:flex; align-items:center; gap:7px; margin-bottom: 8px; min-height: 18px }
+  header b { font-size: 13px; font-weight: 600 }
+  .badge { font-size: 10.5px; font-weight: 500; color: var(--dim); border: 1px solid var(--sep); border-radius: 5px; padding: 0 5px; line-height: 15px }
 
   svg { display:block; flex:none }
   .track { stroke: var(--track) }
   .arc { stroke: var(--c); transition: stroke-dashoffset .5s ease-out, stroke .3s }
-  .tick { stroke: var(--fg); opacity: .75; stroke-linecap: butt }
-  .hero { display:flex; align-items:center; gap:14px }
-  .hero svg { width: 64px; height: 64px }
-  .hero .num { font-size: 22px; font-weight: 600; fill: var(--fg); text-anchor: middle }
-  .hero .num tspan { font-size: 11px; font-weight: 500; fill: var(--dim) }
+  /* A meter you can click: hover tint + chevron on the right that turns when open */
+  .click { cursor: pointer; border-radius: 9px }
+  .click:hover { background: var(--hover-soft) }
+  .click:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+  .chev { color: var(--faint); width: 13px; height: 13px; transition: transform .15s }
+  .open .chev { transform: rotate(90deg) }
+  .nochev { width: 13px; flex: none }
+
+  .hero { display:flex; align-items:center; gap:14px; margin: 0 -8px; padding: 6px 8px }
+  .hero svg.ring { width: 68px; height: 68px }
+  .hero .num { font-size: 23px; font-weight: 600; fill: var(--fg); text-anchor: middle; letter-spacing: -.02em }
+  .hero .num tspan { font-size: 11px; font-weight: 500; fill: var(--dim); letter-spacing: 0 }
   .info { min-width:0; flex:1 }
   .label { font-size: 14px; font-weight: 600 }
-  .sub { font-size: 12px; color: var(--dim); margin-top: 1px }
-  .fc { font-size: 12px; margin-top: 3px; color: var(--warn); font-weight: 500 }
-  .fc.soon { color: var(--bad); font-weight: 600 }
+  .sub { font-size: 12px; color: var(--dim); margin-top: 2px }
+  .status { font-size: 12px; margin-top: 3px; color: var(--dim) }
 
-  .rows { margin-top: 12px; border-top: 1px solid var(--sep) }
-  .row { display:flex; align-items:center; gap:10px; padding: 7px 0; border-bottom: 1px solid var(--sep) }
-  .rows > :last-child { border-bottom: 0; padding-bottom: 0 }
-  .row svg { width: 26px; height: 26px }
-  .row .info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
-  .row .label { font-size: 13px; font-weight: 500 }
-  .row .sub, .row .fc { display: inline; margin: 0 0 0 6px }
-  .row .rp { font-size: 13px; font-weight: 600; white-space: nowrap }
-  .click { cursor: pointer }
-  .click:focus-visible { outline: 2px solid var(--faint); outline-offset: 2px }
-  .chev { display:inline-block; margin-left:6px; color: var(--dim); font-weight: 400; transition: transform .15s }
-  .open .chev { transform: rotate(90deg) }
+  /* Secondary meters: label, status, % on one line, a bar underneath */
+  .rows { margin-top: 6px; padding-top: 4px; border-top: 1px solid var(--sep) }
+  .row { margin: 0 -8px; padding: 7px 8px 8px }
+  .rtop { display:flex; align-items:baseline; gap:8px }
+  .rtop .label { font-size: 13px; font-weight: 500; white-space: nowrap }
+  .rtop .sub { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .rtop .rp { font-size: 13px; font-weight: 600; white-space: nowrap }
+  .status.st-warn, .sub.st-warn { color: var(--warn) } .status.st-bad, .sub.st-bad { color: var(--bad) }
+  .rtop .chev, .rtop .nochev { align-self: center }
+  .meterbar { height: 5px; border-radius: 3px; background: var(--track); margin-top: 6px; overflow: hidden; margin-right: 21px }
+  .meterbar i { display:block; height: 100%; border-radius: 3px; background: var(--c); transition: width .5s ease-out, background .3s }
 
   /* Runway panel (expanded meter) */
-  .detail { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--sep) }
-  .rows .detail { margin-top: 0; padding-bottom: 12px; border-top: 0; border-bottom: 1px solid var(--sep) }
+  .detail { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--sep) }
+  .rows .detail { margin: 2px 0 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--sep) }
   .dh { display:flex; align-items:center; justify-content:space-between; gap: 8px; min-height: 20px }
   .dh h4 { margin:0; font-size: 12px; font-weight: 600 }
   .verdict { font-size: 12px; line-height: 1.4; color: var(--fg2); margin: 3px 0 2px }
@@ -99,47 +114,68 @@
   .stat .v.c { color: var(--fct) }
   .stat .x { font-size: 11px; color: var(--dim); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
   .bd h4 { margin: 0 0 7px; font-size: 12px; font-weight: 600 } .bd h4 span { font-weight: 400; color: var(--dim) }
-  .stack { display:flex; height: 8px; gap: 2px; border-radius: 4px; overflow: hidden }
+  .bdbar { display:flex; height: 8px; gap: 2px; border-radius: 4px; overflow: hidden }
   .s1 { background: var(--p1) } .s2 { background: var(--p2) } .s3 { background: var(--p3) } .s4 { background: var(--p4) }
   .leg2 { display:flex; flex-wrap: wrap; column-gap: 14px; row-gap: 3px; margin-top: 7px; font-size: 12px }
   .leg2 div { display:flex; align-items:center; gap: 5px; min-width: 0 }
   .leg2 .n { white-space:nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px } .leg2 .sh { color: var(--dim) }
   .sw { width: 8px; height: 8px; border-radius: 2px; flex:none }
 
-  .set { display:flex; align-items:center; justify-content:space-between; padding: 9px 0; border-bottom: 1px solid var(--sep); gap: 10px }
-  .set:last-child { border-bottom: 0 }
-  .set .name { font-size: 13px; white-space: nowrap }
-  .set.stack { flex-direction: column; align-items: flex-start; gap: 8px; height: auto; overflow: visible; border-radius: 0 }
-  .desc { font-size: 11.5px; color: var(--dim); margin-top: 2px; line-height: 1.35; white-space: normal }
-  .seterr { color: var(--bad); font-size: 12px; padding: 6px 0 }
-  .chips { display:flex; gap:4px; flex-wrap: wrap }
-  .chip { width:auto; height:24px; padding: 0 9px; border-radius: 12px; font-size: 12px; background: var(--track); color: var(--fg); font-family: inherit }
-  .chip.on { background: var(--fg); color: var(--solid) }
-  .switch { width: 36px; height: 20px; border-radius: 10px; background: var(--track); position: relative; padding: 0; flex:none }
-  .switch::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s }
-  .switch.on { background: var(--ok-g) } .switch.on::after { transform: translateX(16px) }
-  .switch:hover { background: var(--track) } .switch.on:hover { background: var(--ok-g) }
-  button.action { width:auto; height:28px; padding: 0 12px; margin-top: 10px; background: var(--fg); color: var(--card-solid); border-radius: 7px; font: inherit; font-weight: 500 }
-  button.action:disabled { opacity: .5 }
-  button.action:hover { background: var(--fg); color: var(--card-solid) }
-  .note { margin-top: 12px; padding: 7px 9px; border-radius: 8px; background: var(--track); color: var(--warn); font-size: 12px; line-height: 1.35 }
-  .msg { line-height: 1.45; color: var(--dim); font-size: 12.5px }
-  .msg.err { color: var(--bad) }
+  /* Messages inside a card (not connected, errors, stale data) */
+  .msg { display:flex; gap: 8px; line-height: 1.45; color: var(--fg2); font-size: 12.5px }
+  .msg .ic { width: 15px; height: 15px; margin-top: 1px; color: var(--warn) }
+  .msg.quiet { color: var(--dim) }
+  .note { display:flex; gap: 7px; align-items: flex-start; margin-top: 8px; padding: 7px 9px; border-radius: 8px; background: var(--track); color: var(--fg2); font-size: 12px; line-height: 1.35 }
+  .note .ic { width: 14px; height: 14px; margin-top: 1px; color: var(--warn) }
+  .actions { margin: 10px 0 2px 23px }
+  .actions .sub { margin-top: 6px }
+  button.action { width:auto; height: 26px; padding: 0 12px; background: var(--accent); color: #fff; border-radius: 6px; font: inherit; font-size: 12.5px; font-weight: 500 }
+  button.action:hover { background: var(--accent); color: #fff; filter: brightness(1.08) }
+  button.action:disabled { opacity: .55 }
   .title { font-size: 14px; font-weight: 600; margin-bottom: 4px }
+  .welcome { position: relative; padding-right: 36px }
+  .welcome .x { position: absolute; top: 8px; right: 8px }
+  .welcome .msg { display: block; color: var(--dim) }
   .skel .track { stroke: var(--track) }
   .bar { height: 10px; border-radius: 5px; background: var(--track) }
 
-  footer { display:flex; justify-content:space-between; align-items:center; padding: 0 2px; height: 28px }
-  footer small { color: var(--dim); font-size: 11.5px }
+  /* Settings: grouped sections, like System Settings */
+  .sv-head { display:flex; align-items:center; gap: 2px; margin: 0 0 4px -4px; height: 26px }
+  .sv-head h2 { margin: 0; font-size: 15px; font-weight: 600 }
+  .sec { font-size: 12px; font-weight: 600; color: var(--fg2); margin: 14px 2px 6px }
+  .group { background: var(--card); border: 1px solid var(--edge); border-radius: 10px; padding: 0 12px }
+  .set { display:flex; align-items:center; justify-content:space-between; padding: 9px 0; border-bottom: 1px solid var(--sep); gap: 12px; min-height: 40px }
+  .set:last-child { border-bottom: 0 }
+  .set .name { font-size: 13px }
+  .set.col { flex-direction: column; align-items: stretch; gap: 8px }
+  .set.off .chips { opacity: .4; pointer-events: none }
+  .desc { font-size: 11.5px; color: var(--dim); margin-top: 2px; line-height: 1.35 }
+  .seterr { display:flex; gap: 7px; color: var(--bad); font-size: 12px; padding: 4px 2px }
+  .chips { display:flex; gap:4px; flex-wrap: wrap }
+  .chip { width:auto; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 12px; background: var(--track); color: var(--fg); font-family: inherit }
+  .chip.on, .chip.on:hover { background: var(--accent); color: #fff }
+  .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--track); position: relative; padding: 0; flex:none; transition: background .15s }
+  .switch::after { content:""; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s }
+  .switch.on { background: var(--accent) } .switch.on::after { transform: translateX(14px) }
+  .switch:hover { background: var(--hover) } .switch.on:hover { background: var(--accent) }
+  .switch:focus-visible, .chip:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+  .select { position: relative; min-width: 0 }
+  .select select { appearance: none; font: inherit; font-size: 12.5px; color: var(--fg); background: var(--track); border: 0; border-radius: 6px; height: 24px;
+                   padding: 0 24px 0 9px; max-width: 230px; text-overflow: ellipsis; outline: none }
+  .select .ic { position: absolute; right: 6px; top: 6px; width: 12px; height: 12px; color: var(--dim); pointer-events: none; transform: rotate(90deg) }
+
+  footer { display:flex; justify-content:space-between; align-items:center; padding: 0 2px; height: 30px; flex: none; gap: 8px }
+  footer small { color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
   footer small.warn { color: var(--warn); font-weight: 500 }
   .btns { display:flex; gap:2px }
   button { background: none; color: var(--dim); border:0; border-radius:6px; width:26px; height:24px; display:grid; place-items:center; padding:0 }
-  button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
   button:hover { background: var(--hover); color: var(--fg) }
-  @media (prefers-reduced-motion: reduce) { .arc, .chev, .switch::after { transition: none } }
+  button:disabled { opacity: .45; pointer-events: none }
+  button.text { width: auto; padding: 0 8px; font: inherit; font-size: 12px }
+  @media (prefers-reduced-motion: reduce) { .arc, .chev, .meterbar i, .switch, .switch::after { transition: none } }
 </style>
-<div id="app"></div>
-<footer><small id="time">Loading…</small><span class="btns"><button id="r" title="Refresh" aria-label="Refresh"><svg viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.7-4"/><path d="M12.5 1.5v3h-3"/></svg></button><button id="gear" title="Settings" aria-label="Settings"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3"/></svg></button><button id="more" title="Menu" aria-label="Menu"><svg viewBox="0 0 16 16" style="fill:currentColor;stroke:none"><circle cx="3" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="13" cy="8" r="1.2"/></svg></button></span></footer>
+<div id="app"><div id="content"></div></div>
+<footer id="foot"></footer>
 <script>
 // DOM is built with createElement/textContent (never innerHTML), so provider text can't inject markup.
 const NS = "http://www.w3.org/2000/svg";
@@ -158,6 +194,26 @@ function s(tag, attrs, parent, text) {
   if (parent) parent.append(e);
   return e;
 }
+// Icons from Lucide (lucide.dev, ISC license), 24x24 stroked paths.
+const ICONS = {
+  refresh: [["path", { d: "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" }], ["path", { d: "M21 3v5h-5" }]],
+  gear: [["path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }], ["circle", { cx: 12, cy: 12, r: 3 }]],
+  chev: [["path", { d: "m9 18 6-6-6-6" }]],
+  back: [["path", { d: "m15 18-6-6 6-6" }]],
+  close: [["path", { d: "M18 6 6 18" }], ["path", { d: "m6 6 12 12" }]],
+  alert: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "M12 8v4" }], ["path", { d: "M12 16h.01" }]],
+};
+function icon(name, cls) {
+  const svg = s("svg", { viewBox: "0 0 24 24", class: "ic" + (cls ? " " + cls : ""), "aria-hidden": "true" });
+  ICONS[name].forEach(([tag, attrs]) => s(tag, attrs, svg));
+  return svg;
+}
+function iconButton(name, label, onClick) {
+  const b = el("button", "", undefined, [icon(name)]);
+  b.title = label; b.setAttribute("aria-label", label); b.onclick = onClick;
+  return b;
+}
+
 const MIN = 60000, H = 3600000, D = 86400000;
 const clamp = (v, a = 0, b = 100) => Math.min(b, Math.max(a, v));
 const level = (p) => p >= 85 ? "bad" : p >= 60 ? "warn" : "ok";
@@ -168,6 +224,7 @@ function dur(m) {
   if (m < 1) return "<1m";
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60), r = m % 60;
+  if (h >= 24 * 7) return `${Math.round(h / 24)}d`; // a billing cycle: hours are noise
   if (h >= 24) return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h / 24}d`;
   return r ? `${h}h ${r}m` : `${h}h`;
 }
@@ -176,50 +233,22 @@ function countdown(iso) {
   const m = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / MIN));
   return m < 1 ? "Resets now" : "Resets in " + dur(m);
 }
-// Time formats follow the user's locale.
+// Time formats follow the user's locale. Near times get a weekday; anything a week or more away gets a date
+// (a monthly reset "Mon 9:00 AM" would be ambiguous).
 const tfmt = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const hfmt = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric" });
 const dname = (t) => new Date(t).toLocaleDateString([], { weekday: "short" });
+const datefmt = (t) => new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
 const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
-const dtfmt = (t) => (sameDay(t, Date.now()) ? "" : dname(t) + " ") + tfmt(t);
-// Burn rates: weekly meters burning slowly read better per day.
+const dtfmt = (t) => sameDay(t, Date.now()) ? tfmt(t) : Math.abs(t - Date.now()) < 6 * D ? dname(t) + " " + tfmt(t) : datefmt(t);
+// Burn rates: weekly/monthly meters burning slowly read better per day.
 const rateUnit = (m) => (m.windowMinutes > 600 && m.forecast && m.forecast.ratePerHour < 2 ? "day" : "h");
-const fmtRate = (r, unit) => unit === "day" ? Math.round(r * 24) + "%/day" : (r < 10 ? (Math.round(r * 10) / 10).toFixed(r < 0.05 ? 0 : 1) : Math.round(r)) + "%/h";
+const fmtRate = (r, unit) => unit === "day" ? (r * 24 < 10 ? (Math.round(r * 240) / 10) : Math.round(r * 24)) + "%/day" : (r < 10 ? (Math.round(r * 10) / 10).toFixed(r < 0.05 ? 0 : 1) : Math.round(r)) + "%/h";
 
-// Forecast line on rings: only speak up when the limit will be hit before the reset.
-function forecastLine(m, p) {
-  const f = m.forecast;
-  if (f && f.hitsBeforeReset && f.minutesToLimit != null && p < 100)
-    return el("div", "fc" + (f.minutesToLimit < 30 ? " soon" : ""), "Runs out in ~" + dur(f.minutesToLimit));
-  return null;
-}
-
-const shown = new Map(); // last percent drawn per ring, so updates ease from the old value
-let data = null, refreshing = false, notifyAt = [];
-
-function ring(key, p, sw, withNum, pace = null) {
-  const r = (100 - sw) / 2, C = 2 * Math.PI * r;
-  const svg = s("svg", { viewBox: "0 0 100 100" });
-  s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "track" }, svg);
-  const arc = s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "arc", "stroke-linecap": "round", "stroke-dasharray": C, transform: "rotate(-90 50 50)" }, svg);
-  const off = (v) => C * (1 - Math.max(v, 0.5) / 100);
-  arc.setAttribute("stroke-dashoffset", off(shown.get(key) ?? 0));
-  requestAnimationFrame(() => requestAnimationFrame(() => arc.setAttribute("stroke-dashoffset", off(p))));
-  shown.set(key, p);
-  if (pace !== null) { // where usage "should" be if spread evenly across the window
-    const a = pace * 2 * Math.PI, inner = r - sw / 2 - 1.5, outer = r + sw / 2 + 1.5;
-    s("line", { x1: 50 + inner * Math.sin(a), y1: 50 - inner * Math.cos(a), x2: 50 + outer * Math.sin(a), y2: 50 - outer * Math.cos(a), class: "tick", "stroke-width": withNum ? 2 : 5 }, svg);
-  }
-  if (withNum) { const t = s("text", { x: 50, y: 58, class: "num" }, svg, String(Math.round(p))); s("tspan", {}, t, "%"); }
-  return svg;
-}
+const shown = new Map(); // last percent drawn per gauge, so updates ease from the old value
+let data = null, refreshing = false, notifyAt = [], version = "";
 
 const windowStart = (m) => (m.resetsAt && m.windowMinutes ? Date.parse(m.resetsAt) - m.windowMinutes * MIN : null);
-// How far through the quota window we are (0..1). The tick on each ring sits here.
-function paceOf(m) {
-  const t0 = windowStart(m);
-  return t0 === null ? null : clamp((Date.now() - t0) / (m.windowMinutes * MIN), 0, 1);
-}
 // Readings that belong to this window, sorted and sane.
 function readings(m) {
   const t0 = windowStart(m);
@@ -244,7 +273,49 @@ const fcClass = (m) => {
 };
 const projectedAt = (m, asOf, t) => clamp(m.usedPercent + ((m.forecast ? m.forecast.ratePerHour : 0) * (t - asOf)) / H);
 
-// x-axis ticks: hours for short spans, every 6h for ~a day, midnights (labelled with the day) for weeks.
+const CLOSE = 95; // projected % at reset from which we call it "close" (status line and verdict agree)
+// One short status per meter, in plain words. cls "" = calm, "warn"/"bad" = needs attention.
+// (Replaces the old pace tick on the rings: nobody could tell what that line meant.)
+function status(m, asOf) {
+  const p = clamp(m.usedPercent), f = m.forecast;
+  if (p >= 100) return { text: "Limit reached", cls: "bad" };
+  if (f && f.hitsBeforeReset && f.minutesToLimit != null) {
+    const hit = asOf + f.minutesToLimit * MIN;
+    return { text: "Runs out " + (f.minutesToLimit < 12 * 60 ? "in ~" + dur(f.minutesToLimit) : "~" + dtfmt(hit)), cls: f.minutesToLimit < 30 ? "bad" : "warn" };
+  }
+  if (f && m.resetsAt) {
+    const end = Math.round(projectedAt(m, asOf, Date.parse(m.resetsAt)));
+    return end >= CLOSE ? { text: "Close: ~" + end + "% by the reset", cls: "warn" } : { text: "On track: ~" + end + "% by the reset", cls: "" };
+  }
+  return null;
+}
+
+// The hero gauge: a ring with the number inside.
+function ring(key, p) {
+  const sw = 8, r = (100 - sw) / 2, C = 2 * Math.PI * r;
+  const svg = s("svg", { viewBox: "0 0 100 100", class: "ring", role: "img", "aria-label": Math.round(p) + "% used" });
+  s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "track" }, svg);
+  const arc = s("circle", { cx: 50, cy: 50, r, fill: "none", "stroke-width": sw, class: "arc", "stroke-linecap": "round", "stroke-dasharray": C, transform: "rotate(-90 50 50)" }, svg);
+  const off = (v) => C * (1 - Math.max(v, 0.5) / 100);
+  arc.setAttribute("stroke-dashoffset", off(shown.get(key) ?? 0));
+  requestAnimationFrame(() => requestAnimationFrame(() => arc.setAttribute("stroke-dashoffset", off(p))));
+  shown.set(key, p);
+  const t = s("text", { x: 50, y: 58, class: "num" }, svg, String(Math.round(p))); s("tspan", {}, t, "%");
+  return svg;
+}
+// Secondary gauges: a bar (easier to compare at a glance than tiny rings).
+function bar(key, p) {
+  const fill = el("i");
+  fill.style.width = (shown.get(key) ?? 0) + "%";
+  requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = Math.max(p, 1) + "%"; }));
+  shown.set(key, p);
+  const b = el("div", "meterbar", undefined, [fill]);
+  b.setAttribute("role", "progressbar"); b.setAttribute("aria-valuenow", String(Math.round(p))); b.setAttribute("aria-valuemin", "0"); b.setAttribute("aria-valuemax", "100");
+  return b;
+}
+
+// x-axis ticks: hours for short spans, every 6h for ~a day, midnights (labelled with the day) for a week,
+// evenly spaced dates for a month.
 function timeTicks(t0, t1) {
   const out = [], span = t1 - t0, d = new Date(t0);
   if (span <= 12 * H) {
@@ -257,23 +328,30 @@ function timeTicks(t0, t1) {
       const hr = new Date(t).getHours();
       if (hr % 6 === 0) out.push({ t, label: hr === 0 ? dname(t) : hfmt(t) });
     }
-  } else {
+  } else if (span <= 8 * D) {
     d.setHours(24, 0, 0, 0);
     for (let t = d.getTime(); t < t1; t += D) out.push({ t, label: dname(t), day: true });
+  } else {
+    const step = Math.ceil(span / D / 6);
+    d.setHours(24, 0, 0, 0);
+    for (let day = new Date(d); day.getTime() < t1; day.setDate(day.getDate() + step)) out.push({ t: day.getTime(), label: datefmt(day.getTime()) });
   }
   return out;
 }
 
 let chartSeq = 0; // unique ids for SVG <defs> when several charts are open
 // The Runway chart: the quota window on a time axis, actual usage, projection, limit hit and the locked-out stretch.
-function runway(m, W, zoomed, asOf) {
+// `zoomSpan` (ms, 0 = whole window): show only that much of the past plus a slice of the near future.
+function runway(m, W, zoomSpan, asOf) {
   const now = Date.now(), f = m.forecast, p = clamp(m.usedPercent);
   const ws = windowStart(m), reset = Date.parse(m.resetsAt), span = reset - ws;
   const hit = hitAt(m, asOf);
+  const zoomed = zoomSpan > 0;
   let t0 = ws, t1 = reset;
-  if (zoomed) { // last 24h + the near future (up to a bit past the limit, else 12h)
-    t0 = Math.max(ws, now - 24 * H);
-    t1 = Math.min(reset, now + (hit ? clamp(hit - now + 2 * H, 3 * H, 12 * H) : 12 * H));
+  if (zoomed) { // e.g. 24h: last 24h + up to a bit past the limit (else 12h ahead); scaled up for a 7-day zoom
+    const k = zoomSpan / (24 * H);
+    t0 = Math.max(ws, now - zoomSpan);
+    t1 = Math.min(reset, now + (hit ? clamp(hit - now + 2 * H * k, 3 * H * k, 12 * H * k) : 12 * H * k));
   }
   const HT = 156, mt = 22, mb = 22, mr = 36, PW = W - mr;
   const x = (t) => ((t - t0) / (t1 - t0)) * PW;
@@ -372,8 +450,8 @@ function runway(m, W, zoomed, asOf) {
   s("circle", { cx: x(cur[0]), cy: y(p), r: 3.5, class: "dot" }, svg);
 
   // x axis: start · ticks · now · end, dropping labels that would collide
-  const long = t1 - t0 > 12 * H, ay = HT - 6;
-  const when = (t) => (long ? dname(t) + " " + hfmt(t) : tfmt(t));
+  const ay = HT - 6;
+  const when = (t) => (t1 - t0 > 8 * D ? datefmt(t) : t1 - t0 > 12 * H ? dname(t) + " " + hfmt(t) : tfmt(t));
   const st = { x: 0, label: when(t0), anchor: "start" };
   const nw = { x: xn, label: "now", anchor: "middle", strong: true };
   const en = { x: PW, label: t1 === reset ? "Resets " + when(t1) : when(t1), anchor: "end" };
@@ -441,6 +519,7 @@ function verdict(m, asOf) {
   } else {
     const end = Math.round(projectedAt(m, asOf, reset));
     v.textContent = end >= 99 ? "Close: at this pace you'll reach the limit right around the reset."
+      : end >= CLOSE ? "Close: at this pace you'll finish at about " + end + "%, just under the limit."
       : "On track: you'll finish at about " + end + "% when it resets.";
   }
   return v;
@@ -466,7 +545,7 @@ function stats(m, asOf) {
 function breakdown(m) {
   const items = m.breakdown.filter((b) => b.share > 0);
   const sw = (i) => "s" + Math.min(i + 1, 4);
-  const stack = el("div", "stack", undefined, items.map((b, i) => { const e = el("i", sw(i)); e.style.flex = String(b.share); return e; }));
+  const stack = el("div", "bdbar", undefined, items.map((b, i) => { const e = el("i", sw(i)); e.style.flex = String(b.share); return e; }));
   return el("div", "bd", undefined, [
     el("h4", "", "Where it went ", [el("span", "", "\u00B7 by project folder, share of tokens used")]),
     stack,
@@ -476,20 +555,25 @@ function breakdown(m) {
 }
 
 const open = new Set();   // meters whose Runway panel is expanded
-const zoom = new Map();   // meter key -> "24h" for weekly meters zoomed in
+const zoom = new Set();   // meters zoomed into their recent past (long windows only)
 let pendingCharts = [];   // charts are drawn after insertion, once the width is known
+
+// Long windows get a zoom: a week -> the last 24h, a billing cycle -> the last 7 days.
+const zoomOf = (m) => m.windowMinutes >= 20 * 1440 ? { full: "Month", short: "7d", span: 7 * D, title: "Last 7 days" }
+  : m.windowMinutes >= 7 * 1440 ? { full: "Week", short: "24h", span: 24 * H, title: "Last 24 hours" } : null;
+const windowTitle = (m) => m.windowMinutes <= 600 ? "This session" : m.windowMinutes <= 8 * 1440 ? "This week" : "This billing cycle";
 
 function detail(key, m, asOf) {
   const d = el("div", "detail lv-" + level(clamp(m.usedPercent)) + " " + fcClass(m));
   if (!hasWindow(m)) { if (m.breakdown && m.breakdown.length) d.append(breakdown(m)); return d; }
-  const weekly = m.windowMinutes >= 7 * 1440, zoomed = weekly && zoom.get(key) === "24h";
-  const head = el("div", "dh", undefined, [el("h4", "", zoomed ? "Last 24 hours" : "This window")]);
-  if (weekly && hasChart(m)) {
+  const z = zoomOf(m), zoomed = Boolean(z && zoom.has(key) && hasChart(m));
+  const head = el("div", "dh", undefined, [el("h4", "", zoomed ? z.title : windowTitle(m))]);
+  if (z && hasChart(m)) {
     const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", "Chart range");
-    [["Week", null], ["24h", "24h"]].forEach(([label, v]) => {
-      const b = el("button", (zoom.get(key) ?? null) === v ? "on" : "", label);
-      b.setAttribute("aria-pressed", String((zoom.get(key) ?? null) === v));
-      b.onclick = () => { v ? zoom.set(key, v) : zoom.delete(key); render(data); };
+    [[z.full, false], [z.short, true]].forEach(([label, on]) => {
+      const b = el("button", zoomed === on ? "on" : "", label);
+      b.setAttribute("aria-pressed", String(zoomed === on));
+      b.onclick = (e) => { e.stopPropagation(); on ? zoom.add(key) : zoom.delete(key); render(data); };
       seg.append(b);
     });
     head.append(seg);
@@ -498,20 +582,21 @@ function detail(key, m, asOf) {
   if (hasChart(m)) {
     const holder = el("div");
     d.append(holder, el("div", "legend", undefined, [el("span", "", undefined, [el("i"), "used"]),
-      ...(m.forecast ? [el("span", "", undefined, [el("i", "proj"), "projected"])] : []), el("span", "", undefined, [el("i", "even"), "even pace"])]));
-    pendingCharts.push(() => holder.append(runway(m, holder.clientWidth, zoomed, asOf)));
+      ...(m.forecast ? [el("span", "", undefined, [el("i", "proj"), "projected"])] : []), el("span", "", undefined, [el("i", "even"), "even pace (lasts exactly to the reset)"])]));
+    pendingCharts.push(() => holder.append(runway(m, holder.clientWidth, zoomed ? z.span : 0, asOf)));
   }
   d.append(stats(m, asOf));
   if (m.breakdown && m.breakdown.length) d.append(breakdown(m));
   return d;
 }
 
-// Click (or Enter/Space) a meter to expand its Runway panel.
+// Click (or Enter/Space) a meter to expand its Runway panel. The chevron always sits at the far right.
 function expandable(node, key, m, chevParent) {
-  if (!hasDetails(m)) return node;
+  if (!hasDetails(m)) { chevParent.append(el("span", "nochev")); return node; }
   node.classList.add("click");
   node.tabIndex = 0; node.setAttribute("role", "button"); node.setAttribute("aria-expanded", String(open.has(key)));
-  chevParent.append(el("span", "chev", "\u203A"));
+  node.title = open.has(key) ? "Hide details" : "Show forecast and history";
+  chevParent.append(icon("chev", "chev"));
   if (open.has(key)) node.classList.add("open");
   const toggle = () => { open.has(key) ? open.delete(key) : open.add(key); render(data); };
   node.onclick = toggle;
@@ -519,44 +604,58 @@ function expandable(node, key, m, chevParent) {
   return node;
 }
 
-function hero(id, m) {
-  const p = clamp(m.usedPercent);
-  const info = el("div", "info", undefined, [el("div", "label", m.label), el("div", "sub", countdown(m.resetsAt)), forecastLine(m, p)]);
-  const node = el("div", "hero lv-" + level(p), undefined, [ring(id + m.label, p, 7, true, paceOf(m)), info]);
-  return expandable(node, id + m.label, m, info.firstChild);
+function hero(key, m, asOf) {
+  const p = clamp(m.usedPercent), st = status(m, asOf);
+  const info = el("div", "info", undefined, [
+    el("div", "label", m.label),
+    m.resetsAt ? el("div", "sub", countdown(m.resetsAt) + " \u00B7 " + dtfmt(Date.parse(m.resetsAt))) : null,
+    st ? el("div", "status" + (st.cls ? " st-" + st.cls : ""), st.text) : null,
+  ]);
+  const node = el("div", "hero lv-" + level(p), undefined, [ring(key, p), info]);
+  return expandable(node, key, m, node);
 }
 
-function row(id, m) {
-  const p = clamp(m.usedPercent), fc = forecastLine(m, p);
-  const info = el("div", "info", undefined, [el("span", "label", m.label), fc ?? (m.resetsAt ? el("span", "sub", countdown(m.resetsAt).replace("Resets", "resets")) : null)]);
-  const rp = el("div", "rp", Math.round(p) + "%");
-  const node = el("div", "row lv-" + level(p), undefined, [ring(id + m.label, p, 14, false, paceOf(m)), info, rp]);
-  return expandable(node, id + m.label, m, rp);
+function row(key, m, asOf) {
+  const p = clamp(m.usedPercent), st = status(m, asOf);
+  // Calm meters show when they reset; ones that need attention say why instead (the reset is in the details).
+  const sub = st && st.cls ? el("span", "sub st-" + st.cls, st.text) : el("span", "sub", countdown(m.resetsAt));
+  const top = el("div", "rtop", undefined, [el("span", "label", m.label), sub, el("span", "rp", Math.round(p) + "%")]);
+  const node = el("div", "row lv-" + level(p), undefined, [top, bar(key, p)]);
+  return expandable(node, key, m, top);
 }
 
 function provider(p) {
-  const header = el("header", "", undefined, [el("b", "", p.name), ...(p.plan ? [el("span", "pill", p.plan)] : [])]);
+  const header = el("header", "", undefined, [el("b", "", p.name), p.plan ? el("span", "badge", p.plan) : null]);
   const card = el("div", "card", undefined, [header]);
   if (p.status === "ok" && p.meters.length) {
     // the time the current values were measured (stale data is as old as its last reading)
     const asOf = (m) => { const r = readings(m); return p.stale ? (r.length ? r[r.length - 1][0] : data.lastOkAt || Date.now()) : Math.min(Date.now(), data.updatedAt || Date.now()); };
     const [first, ...rest] = p.meters;
-    card.append(hero(p.id, first));
-    if (open.has(p.id + first.label) && hasDetails(first)) card.append(detail(p.id + first.label, first, asOf(first)));
-    if (rest.length) card.append(el("div", "rows", undefined, rest.flatMap((m) => {
-      const key = p.id + m.label;
-      return open.has(key) && hasDetails(m) ? [row(p.id, m), detail(key, m, asOf(m))] : [row(p.id, m)];
-    })));
-    if (p.stale) card.append(el("div", "note", (p.message ?? "Couldn't refresh.") + " Showing last known values."));
+    const k = (m) => p.id + "|" + m.label;
+    card.append(hero(k(first), first, asOf(first)));
+    if (open.has(k(first)) && hasDetails(first)) card.append(detail(k(first), first, asOf(first)));
+    if (rest.length) card.append(el("div", "rows", undefined, rest.flatMap((m) =>
+      open.has(k(m)) && hasDetails(m) ? [row(k(m), m, asOf(m)), detail(k(m), m, asOf(m))] : [row(k(m), m, asOf(m))])));
+    if (p.stale) card.append(el("div", "note", undefined, [icon("alert"), el("div", "", undefined, [(p.message ?? "Couldn't refresh.") + " Showing the last known values.", actionFor(p)])]));
   } else {
-    card.append(el("div", "msg" + (p.status === "error" ? " err" : ""), p.message ?? "No data."));
-    if (p.action === "refresh-login") card.append(actionButton(p));
+    // An expected state (not set up, login expired, rate-limited) is a note, not an alarm.
+    const quiet = p.status !== "error";
+    card.append(el("div", "msg" + (quiet ? " quiet" : ""), undefined, [quiet ? null : icon("alert"), el("div", "", p.message ?? "No data.")]));
+    const a = actionFor(p);
+    if (a) card.append(a);
   }
   return card;
 }
 
-// "Refresh login": asks Claude Code itself to renew its login (it does so whenever it makes a request).
-function actionButton(p) {
+// A button that fixes the problem, when there is one.
+function actionFor(p) {
+  if (p.action === "open-settings") {
+    const b = el("button", "action", "Open Settings");
+    b.onclick = () => { view = "settings"; render(data); };
+    return el("div", "actions", undefined, [b]);
+  }
+  if (p.action !== "refresh-login") return null;
+  // "Refresh login": asks Claude Code itself to renew its login (it does so whenever it makes a request).
   const b = el("button", "action", "Refresh login");
   const hint = el("div", "sub", "Sends one tiny message through Claude Code. Uses a negligible amount of quota.");
   b.onclick = async () => {
@@ -564,12 +663,12 @@ function actionButton(p) {
     const r = await window.quota.action(p.id, p.action);
     if (r && !r.ok) { b.disabled = false; b.textContent = "Refresh login"; hint.textContent = r.message ?? "Couldn't refresh."; hint.style.color = "var(--bad)"; }
   };
-  return el("div", "", undefined, [b, hint]);
+  return el("div", "actions", undefined, [b, hint]);
 }
 
 function skeleton() {
-  const svg = s("svg", { viewBox: "0 0 100 100" });
-  s("circle", { cx: 50, cy: 50, r: 46.5, fill: "none", "stroke-width": 7, class: "track" }, svg);
+  const svg = s("svg", { viewBox: "0 0 100 100", class: "ring" });
+  s("circle", { cx: 50, cy: 50, r: 46, fill: "none", "stroke-width": 8, class: "track" }, svg);
   const lines = el("div", "info", undefined, [el("div", "bar"), el("div", "bar")]);
   lines.children[0].style.width = "60%"; lines.children[1].style.cssText = "width:40%;margin-top:8px";
   return el("div", "card skel", undefined, [el("div", "hero", undefined, [svg, lines])]);
@@ -578,11 +677,12 @@ function skeleton() {
 // Footer: calm when fresh, amber when the data is old (and when we'll try again).
 function setTime() {
   const t = document.getElementById("time");
+  if (!t) return;
   const now = Date.now();
   const age = data && data.lastOkAt ? now - data.lastOkAt : 0;
   const old = age > 5 * 60000;
-  let text = "Loading…";
-  if (refreshing) text = "Updating…";
+  let text = "Loading\u2026";
+  if (refreshing) text = "Updating\u2026";
   else if (data && data.updatedAt) {
     text = old ? "Last updated " + dur(age / 60000) + " ago"
       : data.lastOkAt ? "Updated " + tfmt(data.lastOkAt) : "Not updated yet";
@@ -590,80 +690,133 @@ function setTime() {
   }
   t.textContent = text;
   t.classList.toggle("warn", !refreshing && Boolean(old || (data && data.updatedAt && !data.lastOkAt)));
+  const r = document.getElementById("r");
+  if (r) r.disabled = refreshing;
 }
 
-// Dev hooks via QUOTAPUS_VIEW: "settings", "expand" (first two meters), "expand:2" or "expand:1,2:24h".
+// The footer is rebuilt only when the view changes, so keyboard focus survives the 30s re-render.
+let footFor = null;
+function renderFooter() {
+  if (footFor === view) return setTime();
+  footFor = view;
+  const f = document.getElementById("foot");
+  if (view === "settings") {
+    f.replaceChildren(el("small", "", "quotapus" + (version ? " v" + version : "")), el("button", "text", "Quit quotapus"));
+    f.lastChild.onclick = () => window.quota.quit();
+    return;
+  }
+  const t = el("small"); t.id = "time";
+  const r = iconButton("refresh", "Refresh now", async () => {
+    refreshing = true; setTime();
+    try { await window.quota.refresh(); } finally { refreshing = false; setTime(); }
+  });
+  r.id = "r";
+  f.replaceChildren(t, el("span", "btns", undefined, [r, iconButton("gear", "Settings", () => { view = "settings"; render(data); })]));
+  setTime();
+}
+
+// Window height follows the content (capped by the main process; past that, the content scrolls).
+function fit() {
+  const b = getComputedStyle(document.body);
+  window.quota.resize(document.getElementById("content").offsetHeight + document.getElementById("foot").offsetHeight + parseFloat(b.paddingTop) + parseFloat(b.paddingBottom));
+}
+
+// Dev hooks via QUOTAPUS_VIEW: "settings", "expand" (first two meters), "expand:2", "expand:1,2:zoom",
+// "expand:0::1" (4th part = provider index, e.g. Cursor in mock mode).
 const hash = location.hash.slice(1).split(":");
 let view = hash[0] === "settings" ? "settings" : "main";
-let pendingExpand = hash[0] === "expand" ? { idx: hash[1] ? hash[1].split(",").map(Number) : [0, 1], zoom: hash[2] === "24h" } : null;
+let pendingExpand = hash[0] === "expand" ? { idx: hash[1] ? hash[1].split(",").map(Number) : [0, 1], zoom: hash[2] === "24h" || hash[2] === "zoom", provider: Number(hash[3]) || 0 } : null;
+let welcomeClosed = false;
 
+// ---- settings ----
+function setRow(name, desc, control, extraCls) {
+  const label = el("div", "", undefined, [el("div", "name", name), desc ? el("div", "desc", desc) : null]);
+  return el("div", "set" + (extraCls ? " " + extraCls : ""), undefined, [label, control]);
+}
 function toggle(name, on, onChange, desc) {
   const b = el("button", "switch" + (on ? " on" : "")); b.setAttribute("role", "switch"); b.setAttribute("aria-checked", String(on));
   b.setAttribute("aria-label", name); b.onclick = () => onChange(!on);
-  const label = el("div", "", undefined, [el("div", "name", name), ...(desc ? [el("div", "desc", desc)] : [])]);
-  return el("div", "set", undefined, [label, b]);
+  return setRow(name, desc, b);
 }
-function chips(name, options) {
-  return el("div", "set stack", undefined, [el("span", "name", name), el("div", "chips", undefined,
-    options.map((o) => { const b = el("button", "chip" + (o.on ? " on" : ""), o.label); b.onclick = o.click; return b; }))]);
+function chips(name, options, desc, off) {
+  return el("div", "set col" + (off ? " off" : ""), undefined, [el("div", "", undefined, [el("div", "name", name), desc ? el("div", "desc", desc) : null]),
+    el("div", "chips", undefined, options.map((o) => { const b = el("button", "chip" + (o.on ? " on" : ""), o.label);
+      b.setAttribute("aria-pressed", String(o.on)); b.onclick = o.click; return b; }))]);
 }
+function select(name, value, options, onChange) {
+  const sel = el("select", "", undefined, options.map(([v, label]) => { const o = el("option", "", label); o.value = v; return o; }));
+  sel.value = value; sel.setAttribute("aria-label", name); sel.onchange = () => onChange(sel.value);
+  return setRow(name, null, el("div", "select", undefined, [sel, icon("chev")]));
+}
+const section = (title, rows) => [el("div", "sec", title), el("div", "group", undefined, rows.filter(Boolean))];
+
 async function renderSettings(error) {
-  const s = await window.quota.getSettings();
-  notifyAt = s.notifyAt || [];
+  const st = await window.quota.getSettings();
+  notifyAt = st.notifyAt || []; version = st.version || version;
   const save = async (patch) => { const r = await window.quota.setSettings(patch); renderSettings(r && r.error); };
-  const app = document.getElementById("app");
-  app.replaceChildren(el("div", "card", undefined, [
-    el("div", "title", "Settings"),
-    ...(error ? [el("div", "seterr", error)] : []),
-    toggle("Read limits from Claude Code", s.claudeStatusLine, (v) => save({ claudeStatusLine: v }),
-      "Adds a status line to Claude Code's settings so quotapus needn't call Anthropic's API. Avoids rate limits. Your existing status line keeps working."),
-    toggle("Percentage in menu bar", s.showPercentInMenuBar, (v) => save({ showPercentInMenuBar: v })),
-    toggle("Usage notifications", s.notifications, (v) => save({ notifications: v })),
-    toggle("Launch at login", s.launchAtLogin, (v) => save({ launchAtLogin: v })),
-    chips("Refresh every", [5, 10, 15].map((m) => ({ label: m + " min", on: s.refreshSeconds === m * 60, click: () => save({ refreshSeconds: m * 60 }) }))),
-    chips("Notify at", [50, 70, 80, 90, 95].map((t) => ({ label: t + "%", on: s.notifyAt.includes(t),
-      click: () => save({ notifyAt: s.notifyAt.includes(t) ? s.notifyAt.filter((x) => x !== t) : [...s.notifyAt, t] }) }))),
-  ]));
-  document.getElementById("time").textContent = "";
-  window.quota.resize(document.body.scrollHeight);
+  const meters = st.meters || [];
+  document.getElementById("content").replaceChildren(...[
+    el("div", "sv-head", undefined, [iconButton("back", "Back", back), el("h2", "", "Settings")]),
+    error ? el("div", "seterr", undefined, [icon("alert"), el("span", "", error)]) : null,
+    ...section("Menu bar", [
+      toggle("Show percentage", st.showPercentInMenuBar, (v) => save({ showPercentInMenuBar: v })),
+      meters.length > 1 ? select("Shows", st.menuBarMeter || meters[0].key, [...meters.map((m) => [m.key, m.name]), ["max", "Whichever is highest"]], (v) => save({ menuBarMeter: v })) : null,
+    ]),
+    ...section("Notifications", [
+      toggle("Usage alerts", st.notifications, (v) => save({ notifications: v }), "Also warns once when a limit is about to run out within 30 minutes."),
+      chips("Alert at", [50, 70, 80, 90, 95].map((t) => ({ label: t + "%", on: st.notifyAt.includes(t),
+        click: () => save({ notifyAt: st.notifyAt.includes(t) ? st.notifyAt.filter((x) => x !== t) : [...st.notifyAt, t] }) })), null, !st.notifications),
+    ]),
+    ...(st.hasClaude || st.claudeStatusLine ? section("Claude Code", [
+      toggle("Read limits from Claude Code", st.claudeStatusLine, (v) => save({ claudeStatusLine: v }),
+        "Adds a status line to Claude Code's settings, so quotapus rarely needs Anthropic's rate-limited API. Your existing status line keeps working."),
+    ]) : []),
+    ...section("General", [
+      toggle("Launch at login", st.launchAtLogin, (v) => save({ launchAtLogin: v })),
+      chips("Check for new usage every", [5, 10, 15].map((m) => ({ label: m + " min", on: st.refreshSeconds === m * 60, click: () => save({ refreshSeconds: m * 60 }) }))),
+    ]),
+  ].filter(Boolean));
+  renderFooter();
+  fit();
 }
+function back() { view = "main"; render(data); }
 
 function render(d) {
   data = d;
   if (view === "settings") return renderSettings();
-  if (pendingExpand && d.results && d.results[0]) {
-    const first = d.results[0];
-    pendingExpand.idx.forEach((i) => { const m = first.meters[i]; if (m) { open.add(first.id + m.label); if (pendingExpand.zoom) zoom.set(first.id + m.label, "24h"); } });
+  if (!d) return;
+  if (pendingExpand && d.results && d.results[pendingExpand.provider]) {
+    const first = d.results[pendingExpand.provider];
+    pendingExpand.idx.forEach((i) => { const m = first.meters[i]; if (m) { open.add(first.id + "|" + m.label); if (pendingExpand.zoom) zoom.add(first.id + "|" + m.label); } });
     pendingExpand = null;
   }
-  const app = document.getElementById("app");
   pendingCharts = [];
   const kids = [];
-  if (d.welcome) kids.push(el("div", "card", undefined, [
-    el("div", "title", "Welcome to quotapus"),
-    el("div", "msg", "Quotapus lives in your menu bar. Click the icon to open this panel; right-click it for settings."),
-  ]));
+  if (d.welcome && !welcomeClosed) {
+    const x = iconButton("close", "Dismiss", () => { welcomeClosed = true; render(data); }); x.classList.add("x");
+    kids.push(el("div", "card welcome", undefined, [el("div", "title", "Welcome to quotapus"),
+      el("div", "msg", "This panel lives in your menu bar. Click any meter to see when it will run out and where the usage went. The gear below opens settings."), x]));
+  }
   if (!d.updatedAt) kids.push(skeleton());
   else if (!d.results.length) kids.push(el("div", "card", undefined, [el("div", "title", "Nothing to show yet"),
-    el("div", "msg", "quotapus reads usage from Claude Code and Cursor. Sign in to either one and it will appear here.")]));
+    el("div", "msg quiet", "quotapus reads usage from Claude Code and Cursor. Sign in to either one and it will appear here.")]));
   else d.results.forEach((p) => kids.push(provider(p)));
-  app.replaceChildren(...kids);
+  document.getElementById("content").replaceChildren(...kids);
   chartSeq = 0;
   pendingCharts.forEach((draw) => draw());
   pendingCharts = [];
-  setTime();
-  window.quota.resize(document.body.scrollHeight);
+  renderFooter();
+  fit();
 }
 
-window.quota.getSettings().then((s) => { notifyAt = (s && s.notifyAt) || []; if (data && view === "main") render(data); }).catch(() => {});
+window.quota.getSettings().then((st) => { notifyAt = (st && st.notifyAt) || []; version = (st && st.version) || ""; if (data && view === "main") render(data); }).catch(() => {});
 window.quota.get().then(render);
-window.quota.onUpdate(render);
+window.quota.onUpdate((d) => { data = d; if (view === "main") render(d); }); // don't yank the settings view away mid-edit
 setInterval(() => data && view === "main" && render(data), 30000); // keep countdowns and "now" fresh without re-fetching
-document.getElementById("r").onclick = async () => {
-  refreshing = true; setTime();
-  try { await window.quota.refresh(); } finally { refreshing = false; setTime(); }
-};
-document.getElementById("gear").onclick = () => { view = view === "settings" ? "main" : "settings"; render(data); };
 window.quota.onOpenSettings(() => { view = "settings"; render(data); });
-document.getElementById("more").onclick = () => window.quota.menu();
+// Esc: leave settings, or close the popup.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || e.target.tagName === "SELECT") return;
+  if (view === "settings") back(); else window.quota.hide();
+});
 </script>
