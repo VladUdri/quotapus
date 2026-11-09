@@ -71,9 +71,19 @@ export function parseUsageSummary(json: unknown): Parsed {
     if (auto !== undefined) meters.push({ label: "Auto + Composer", usedPercent: pct(auto), ...cycle });
     if (api !== undefined) meters.push({ label: "Named models (API)", usedPercent: pct(api), ...cycle });
   }
+  // Enterprise/team accounts report a single "overall" allowance instead of a plan breakdown.
+  const overall = obj(obj(d.individualUsage)?.overall);
+  if (!meters.length && overall && overall.enabled !== false && d.isUnlimited !== true && num(overall.limit) && num(overall.used) !== undefined) {
+    meters.push({ label: "Monthly usage", usedPercent: pct((num(overall.used)! / num(overall.limit)!) * 100), ...cycle });
+  }
   const od = obj(obj(d.individualUsage)?.onDemand);
   if (od && od.enabled !== false && num(od.limit) && num(od.used) !== undefined) {
     meters.push({ label: "On-demand spend", usedPercent: pct((num(od.used)! / num(od.limit)!) * 100), ...cycle });
+  }
+  // A team's shared on-demand budget only matters once some of it has been spent.
+  const team = obj(obj(d.teamUsage)?.onDemand);
+  if (team && team.enabled !== false && num(team.limit) && (num(team.used) ?? 0) > 0) {
+    meters.push({ label: "Team on-demand", usedPercent: pct((num(team.used)! / num(team.limit)!) * 100), ...cycle });
   }
   const m = typeof d.membershipType === "string" ? d.membershipType : undefined;
   return { plan: m ? m[0].toUpperCase() + m.slice(1) : undefined, meters };

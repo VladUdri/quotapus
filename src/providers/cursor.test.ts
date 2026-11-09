@@ -53,3 +53,17 @@ test("parseLegacyUsage reads request counts", () => {
 test("redact keeps the shape but removes every string", () => {
   assert.deepEqual(redact({ email: "me@x.com", n: 3, nested: { a: ["x", "y"] } }), { email: "<string>", n: 3, nested: { a: ["<string>", "<string>"] } });
 });
+
+test("enterprise accounts: a single 'overall' allowance, and idle team budget is not shown", () => {
+  const p = parseUsageSummary({
+    membershipType: "enterprise", isUnlimited: false, billingCycleStart: "2025-01-01T00:00:00Z", billingCycleEnd: "2025-01-31T00:00:00Z",
+    individualUsage: { overall: { enabled: true, used: 40531, limit: 85000, remaining: 44469 } },
+    teamUsage: { onDemand: { enabled: true, used: 0, limit: 2500000, remaining: 2500000 } },
+  });
+  assert.equal(p.plan, "Enterprise");
+  assert.deepEqual(p.meters.map((m) => m.label), ["Monthly usage"]);
+  assert.equal(Math.round(p.meters[0].usedPercent), 48);
+  const spent = parseUsageSummary({ individualUsage: { overall: { used: 1, limit: 10 } }, teamUsage: { onDemand: { used: 500, limit: 1000 } } });
+  assert.deepEqual(spent.meters.map((m) => m.label), ["Monthly usage", "Team on-demand"]);
+  assert.deepEqual(parseUsageSummary({ isUnlimited: true, individualUsage: { overall: { used: 5, limit: 10 } } }).meters, []);
+});
