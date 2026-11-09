@@ -12,7 +12,7 @@ import { gaugeIcon } from "./trayIcon";
 import { createClaude } from "./providers/claude";
 import { createCursor } from "./providers/cursor";
 import { mock, mockCursor } from "./providers/mock";
-import type { ProviderResult } from "./providers/types";
+import type { Provider, ProviderResult } from "./providers/types";
 
 // Mock mode gets its own data dir: fake readings must never land in the real history.json, and a separate
 // dir also means a separate single-instance lock, so a dev copy can run next to the installed app.
@@ -35,8 +35,13 @@ interface Snapshot {
   lastOkAt: number;      // last time fresh data actually arrived (0 = never)
   nextRefreshAt: number; // when we'll try again
   welcome: boolean;
+  activeProviders: number; // providers switched on in settings (0 = the user turned them all off)
 }
-let latest: Snapshot = { results: [], updatedAt: 0, lastOkAt: 0, nextRefreshAt: 0, welcome: firstRun };
+// Providers the user switched off are never fetched: no Keychain/login reads, no network, no card.
+const isOn = (id: string) => !config.disabledProviders.includes(id);
+const activeProviders = () => providers.filter((p) => isOn(p.id));
+const seen = new Map<string, ProviderResult>(); // last raw result per provider (incl. hidden ones), for the settings page
+let latest: Snapshot = { results: [], updatedAt: 0, lastOkAt: 0, nextRefreshAt: 0, welcome: firstRun, activeProviders: activeProviders().length };
 let failures = 0;              // consecutive failed refreshes, drives backoff
 let inFlight: Promise<Snapshot> | null = null;
 let blockedUntil = 0;          // don't call the API before this (server asked us to wait)
@@ -56,27 +61,58 @@ function refresh(): Promise<Snapshot> {
   return inFlight;
 }
 
-async function doRefresh(): Promise<Snapshot> {
-  const fresh = await Promise.all(providers.map((p) => p.fetch()));
+// `only`: fetch just these providers (e.g. one the user just switched on) and keep the others' last results.
+// A partial fetch leaves the polling schedule and backoff alone; those belong to the regular full refresh.
+async function doRefresh(only?: Provider[]): Promise<Snapshot> {
+  const fresh = await Promise.all((only ?? activeProviders()).map((p) => p.fetch()));
+  fresh.forEach((r) => seen.set(r.id, r));
   // If a fetch fails but we have good data from before, keep showing it (flagged stale)
   // rather than blanking the UI. A wrong-but-labelled number beats an empty panel.
-  const results = fresh.filter((r) => !r.hidden).map((r) => {
+  const updated = fresh.filter((r) => !r.hidden).map((r) => {
     const prev = latest.results.find((x) => x.id === r.id);
     return r.status === "error" && prev?.status === "ok" && prev.meters.length
       ? { ...prev, stale: true, message: r.message, action: r.action } : r;
   });
-  attachForecasts(results);
+  attachForecasts(updated);
+  const fetched = new Set(fresh.map((r) => r.id));
+  // Cards keep the order of the providers list; providers that were switched off in the meantime drop out.
+  const results = activeProviders().flatMap((p) => updated.find((r) => r.id === p.id) ?? (fetched.has(p.id) ? [] : latest.results.filter((r) => r.id === p.id)));
   const now = Date.now();
-  // A result that fell back to old data (stale) still means the live fetch failed, so it counts as a failure.
-  failures = fresh.some((r) => (r.status === "error" && !r.recheckSec) || (r.stale && !r.recheckSec)) ? failures + 1 : 0;
   const retryAfter = Math.max(0, ...fresh.map((r) => r.retryAfterSec ?? 0));
   if (retryAfter) blockedUntil = now + retryAfter * 1000;
-  latest = { ...latest, results, updatedAt: now, welcome: firstRun, lastOkAt: fresh.some((r) => r.status === "ok" && !r.stale) ? now : latest.lastOkAt };
-  reschedule(retryAfter, Math.min(...fresh.map((r) => r.recheckSec ?? Infinity)));
+  const gotFresh = fresh.some((r) => r.status === "ok" && !r.stale) || !fresh.length; // nothing to fetch = nothing out of date
+  latest = { ...latest, results, updatedAt: now, welcome: firstRun, activeProviders: activeProviders().length, lastOkAt: gotFresh ? now : latest.lastOkAt };
+  if (!only) {
+    // A result that fell back to old data (stale) still means the live fetch failed, so it counts as a failure.
+    failures = fresh.some((r) => (r.status === "error" && !r.recheckSec) || (r.stale && !r.recheckSec)) ? failures + 1 : 0;
+    reschedule(retryAfter, Math.min(...fresh.map((r) => r.recheckSec ?? Infinity)));
+  }
   updateTray();
-  notify(results);
+  notify(updated);
   win.webContents.send("quota:updated", latest);
   return latest;
+}
+
+// Switching a provider on fetches just that one right away; switching it off removes its card at once.
+function setProviderOn(id: string, on: boolean) {
+  if (isOn(id) === on) return;
+  config.disabledProviders = on ? config.disabledProviders.filter((x) => x !== id) : [...config.disabledProviders, id];
+  saveConfig(config);
+  latest = { ...latest, results: latest.results.filter((r) => isOn(r.id)), activeProviders: activeProviders().length };
+  updateTray();
+  win.webContents.send("quota:updated", latest);
+  const p = providers.find((x) => x.id === id);
+  if (on && p) doRefresh([p]).catch(() => {});
+}
+
+// What the settings page says under each provider's switch.
+function providerDetail(p: Provider): string {
+  if (!isOn(p.id)) return "Off. quotapus doesn't read its login or check its usage.";
+  const r = seen.get(p.id);
+  if (!r) return "Checking…";
+  if (r.hidden) return `Not set up on this Mac. Sign in to ${p.id === "claude" ? "Claude Code" : p.name} and it shows up.`;
+  if (r.status === "ok") return [r.plan && `${r.plan} plan`, `${r.meters.length} limit${r.meters.length === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+  return r.message ?? "Couldn't check.";
 }
 
 // (Re)start the timer for the next fetch. Also called when the user changes the interval.
@@ -172,7 +208,8 @@ function readSettings() {
     showPercentInMenuBar, notifications, notifyAt, refreshSeconds: Math.max(refreshSeconds, MIN_REFRESH_SEC),
     launchAtLogin: autostartEnabled(), claudeStatusLine: statusLineEnabled(claudeSettings, dataDir),
     menuBarMeter: config.menuBarMeter === "max" ? "max" : picked ? `${picked.r.id}|${picked.m.label}` : "", meters,
-    hasClaude: latest.results.some((r) => r.id === "claude"), version: app.getVersion(),
+    hasClaude: isOn("claude") && latest.results.some((r) => r.id === "claude"), version: app.getVersion(),
+    providers: providers.map((p) => ({ id: p.id, name: p.name, on: isOn(p.id), detail: providerDetail(p) })),
   };
 }
 
@@ -182,6 +219,11 @@ function applySettings(p: Record<string, unknown>) {
   if (typeof p.notifications === "boolean") config.notifications = p.notifications;
   if (typeof p.launchAtLogin === "boolean") setAutostart(p.launchAtLogin);
   if (typeof p.menuBarMeter === "string" && p.menuBarMeter.length <= 200) config.menuBarMeter = p.menuBarMeter;
+  // { providerId: on/off }, only for providers that exist
+  const pr = p.providers;
+  if (pr && typeof pr === "object" && !Array.isArray(pr)) {
+    for (const [id, on] of Object.entries(pr)) if (typeof on === "boolean" && providers.some((x) => x.id === id)) setProviderOn(id, on);
+  }
   if (typeof p.refreshSeconds === "number" && [300, 600, 900].includes(p.refreshSeconds)) config.refreshSeconds = p.refreshSeconds;
   if (Array.isArray(p.notifyAt) && p.notifyAt.length <= 6 && p.notifyAt.every((n) => Number.isInteger(n) && n >= 1 && n <= 100)) {
     config.notifyAt = [...new Set(p.notifyAt as number[])].sort((a, b) => a - b);

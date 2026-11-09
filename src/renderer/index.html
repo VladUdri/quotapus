@@ -130,6 +130,7 @@
   .note .ic { width: 14px; height: 14px; margin-top: 1px; color: var(--warn) }
   .actions { margin: 10px 0 2px 23px }
   .actions .sub { margin-top: 6px }
+  .actions.flush { margin-left: 0 }
   button.action { width:auto; height: 26px; padding: 0 12px; background: var(--accent); color: #fff; border-radius: 6px; font: inherit; font-size: 12.5px; font-weight: 500 }
   button.action:hover { background: var(--accent); color: #fff; filter: brightness(1.08) }
   button.action:disabled { opacity: .55 }
@@ -683,6 +684,7 @@ function setTime() {
   const age = data && data.lastOkAt ? now - data.lastOkAt : 0;
   const old = age > 5 * 60000;
   let text = "Loading\u2026";
+  if (data && data.activeProviders === 0) { t.textContent = ""; return; } // nothing is being checked, so nothing can be out of date
   if (refreshing) text = "Updating\u2026";
   else if (data && data.updatedAt) {
     text = old ? "Last updated " + dur(age / 60000) + " ago"
@@ -769,6 +771,8 @@ async function renderSettings(error) {
   document.getElementById("content").replaceChildren(...[
     el("div", "sv-head", undefined, [iconButton("back", "Back", back), el("h2", "", "Settings")]),
     error ? el("div", "seterr", undefined, [icon("alert"), el("span", "", error)]) : null,
+    // One switch per provider. Off = never checked and never shown.
+    ...section("Providers", (st.providers || []).map((p) => toggle(p.name, p.on, (v) => save({ providers: { [p.id]: v } }), p.detail))),
     ...section("Menu bar", [
       toggle("Show percentage", st.showPercentInMenuBar, (v) => save({ showPercentInMenuBar: v })),
       meters.length > 1 ? select("Shows", st.menuBarMeter || meters[0].key, [...meters.map((m) => [m.key, m.name]), ["max", "Whichever is highest"]], (v) => save({ menuBarMeter: v })) : null,
@@ -809,8 +813,14 @@ function render(d) {
       el("div", "msg", "This panel lives in your menu bar. Click any meter to see when it will run out and where the usage went. The gear below opens settings."), x]));
   }
   if (!d.updatedAt) kids.push(skeleton());
-  else if (!d.results.length) kids.push(el("div", "card", undefined, [el("div", "title", "Nothing to show yet"),
-    el("div", "msg quiet", "quotapus reads usage from Claude Code and Cursor. Sign in to either one and it will appear here.")]));
+  else if (!d.results.length) {
+    const allOff = d.activeProviders === 0;
+    const open = el("button", "action", "Open Settings"); open.onclick = () => { view = "settings"; render(data); };
+    kids.push(el("div", "card", undefined, [el("div", "title", allOff ? "All providers are off" : "Nothing to show yet"),
+      el("div", "msg quiet", allOff ? "Switch on the ones you use in Settings."
+        : "quotapus reads usage from Claude Code and Cursor. Sign in to either one and it will appear here, or turn off the ones you don't use in Settings."),
+      el("div", "actions flush", undefined, [open])]));
+  }
   else d.results.forEach((p) => kids.push(provider(p)));
   document.getElementById("content").replaceChildren(...kids);
   chartSeq = 0;
@@ -822,7 +832,8 @@ function render(d) {
 
 window.quota.getSettings().then((st) => { notifyAt = (st && st.notifyAt) || []; version = (st && st.version) || ""; if (data && view === "main") render(data); }).catch(() => {});
 window.quota.get().then(render);
-window.quota.onUpdate((d) => { data = d; if (view === "main") render(d); }); // don't yank the settings view away mid-edit
+// In settings, an update re-renders settings in place (e.g. a provider just switched on goes from "Checking…" to its plan).
+window.quota.onUpdate((d) => { data = d; render(d); });
 setInterval(() => data && view === "main" && render(data), 30000); // keep countdowns and "now" fresh without re-fetching
 window.quota.onOpenSettings(() => { view = "settings"; render(data); });
 // Esc: leave settings, or close the popup.
