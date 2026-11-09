@@ -643,7 +643,10 @@ function render(d) {
     el("div", "title", "Welcome to quotapus"),
     el("div", "msg", "Quotapus lives in your menu bar. Click the icon to open this panel; right-click it for settings."),
   ]));
-  if (!d.updatedAt) kids.push(skeleton()); else d.results.forEach((p) => kids.push(provider(p)));
+  if (!d.updatedAt) kids.push(skeleton());
+  else if (!d.results.length) kids.push(el("div", "card", undefined, [el("div", "title", "Nothing to show yet"),
+    el("div", "msg", "quotapus reads usage from Claude Code and Cursor. Sign in to either one and it will appear here.")]));
+  else d.results.forEach((p) => kids.push(provider(p)));
   app.replaceChildren(...kids);
   chartSeq = 0;
   pendingCharts.forEach((draw) => draw());

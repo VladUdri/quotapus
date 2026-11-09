@@ -90,7 +90,8 @@ export function createClaude(dataDir: string): Provider {
   async function fetchApi(): Promise<ProviderResult> {
     const creds = await readCreds();
     if (!creds) {
-      return result({ status: "not_connected", message: "Install Claude Code and run `claude` once to sign in. quotapus picks it up automatically." });
+      // Not installed / never signed in: hide the card (the popup explains what to do if no provider shows up at all).
+      return result({ status: "not_connected", hidden: true });
     }
     const plan = planOf(creds);
     lastPlan = plan ?? lastPlan;
