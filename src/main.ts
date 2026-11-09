@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeTheme } from "electron";
+import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeTheme, screen } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -209,6 +209,12 @@ function createWindow() {
   win.on("blur", () => win.hide()); // click away = close, like a native popover
 }
 
+// Tallest the popup may get: 720, or less if the screen below the menu bar is shorter. Past that, content scrolls.
+function maxHeight() {
+  const t = tray.getBounds(), area = screen.getDisplayNearestPoint({ x: t.x, y: t.y }).workArea;
+  return Math.max(300, Math.min(720, area.y + area.height - (t.y + t.height + 4) - 12));
+}
+
 function showWindow() {
   const t = tray.getBounds();
   const w = win.getBounds();
@@ -237,7 +243,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("settings:set", (_e, p) => applySettings(p ?? {}));
   ipcMain.on("ui:hide", () => win.hide());
   ipcMain.on("ui:quit", () => app.quit());
-  ipcMain.on("ui:resize", (_e, h: number) => win.setContentSize(WIN_W, Math.max(120, Math.min(720, Math.ceil(h)))));
+  ipcMain.on("ui:resize", (_e, h: number) => win.setContentSize(WIN_W, Math.max(120, Math.min(maxHeight(), Math.ceil(h)))));
 
   await refresh();
 
