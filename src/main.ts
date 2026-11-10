@@ -7,6 +7,7 @@ import { nextDelayMs } from "./backoff";
 import { loadConfig, saveConfig } from "./config";
 import { downsample, forecast } from "./forecast";
 import { History } from "./history";
+import { fillGaps, type Point } from "./backfill";
 import { disable as disableStatusLine, enable as enableStatusLine, isEnabled as statusLineEnabled } from "./statusline";
 import { gaugeIcon } from "./trayIcon";
 import { createClaude } from "./providers/claude";
@@ -150,8 +151,14 @@ function attachForecasts(results: ProviderResult[]) {
     if (r.status !== "ok" || r.stale) continue; // never learn from stale data
     for (const m of r.meters) {
       const samples = history.record(`${r.id}|${m.label}`, now, m.usedPercent, m.resetsAt);
-      m.forecast ??= forecast(samples, now, m.resetsAt);
-      m.spark ??= downsample(samples, 60).map((x) => [x.t, x.p]);
+      // The provider's own event history beats our readings: from the server (exact) it replaces them,
+      // from local logs (estimate) it fills the stretches when quotapus wasn't running.
+      const start = m.resetsAt && m.windowMinutes ? Date.parse(m.resetsAt) - m.windowMinutes * 60_000 : NaN;
+      const series: Point[] = m.curve && m.curveExact ? m.curve
+        : m.curve && !Number.isNaN(start) ? fillGaps(samples, m.curve, start) : samples;
+      m.forecast ??= forecast(series, now, m.resetsAt);
+      m.spark ??= downsample(series, 160).map((x) => (x.est ? [x.t, x.p, 1] : [x.t, x.p]));
+      delete m.curve; // the renderer only needs the merged series
     }
   }
 }

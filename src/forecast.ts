@@ -13,10 +13,10 @@ export function forecast(samples: Sample[], now: number, resetsAt?: string): For
   if (samples.length < 2) return undefined;
   const last = samples[samples.length - 1];
 
-  // Short windows (5h session) -> look back 1h. Weekly -> 6h. Monthly (Cursor's billing cycle) -> 24h,
-  // because a few busy hours extrapolated over weeks would cry wolf.
+  // Short windows (5h session) -> look back 1h. Weekly -> 6h. Monthly (Cursor's billing cycle) -> 7 days,
+  // i.e. your recent days of spending: a few busy hours extrapolated over weeks would cry wolf.
   const untilReset = resetsAt ? Date.parse(resetsAt) - now : Infinity;
-  const lookback = untilReset <= 5.5 * 60 * MIN ? 60 * MIN : untilReset <= 8 * 1440 * MIN || untilReset === Infinity ? 6 * 60 * MIN : 24 * 60 * MIN;
+  const lookback = untilReset <= 5.5 * 60 * MIN ? 60 * MIN : untilReset <= 8 * 1440 * MIN || untilReset === Infinity ? 6 * 60 * MIN : 7 * 1440 * MIN;
 
   const recent = samples.filter((s) => s.t >= now - lookback);
   const first = recent[0];
@@ -26,7 +26,7 @@ export function forecast(samples: Sample[], now: number, resetsAt?: string): For
   if (rate < 0.05) return { ratePerHour: 0, minutesToLimit: null, hitsBeforeReset: false };
 
   const minutesToLimit = Math.round(((100 - last.p) / rate) * 60);
-  if (minutesToLimit > 7 * 24 * 60) return { ratePerHour: rate, minutesToLimit: null, hitsBeforeReset: false };
+  if (minutesToLimit > 31 * 24 * 60) return { ratePerHour: rate, minutesToLimit: null, hitsBeforeReset: false };
   const hitsBeforeReset = untilReset !== Infinity && minutesToLimit * MIN < untilReset;
   return { ratePerHour: Math.round(rate * 10) / 10, minutesToLimit, hitsBeforeReset };
 }
@@ -40,9 +40,9 @@ export function shouldRecord(samples: Sample[], now: number, p: number): boolean
 }
 
 // Thin out a long series to at most n points (keeping first and last) so the chart stays light.
-export function downsample(samples: Sample[], n: number): Sample[] {
+export function downsample<T extends Sample>(samples: T[], n: number): T[] {
   if (samples.length <= n) return samples;
-  const out: Sample[] = [];
+  const out: T[] = [];
   for (let i = 0; i < n; i++) out.push(samples[Math.round((i * (samples.length - 1)) / (n - 1))]);
   return out;
 }

@@ -14,8 +14,16 @@ export interface QuotaMeter {
   resetsAt?: string;   // ISO date
   windowMinutes?: number; // length of the quota window (300 = 5 hours)
   breakdown?: BreakdownItem[];
-  spark?: [number, number][]; // [time ms, used %] readings during this window, for the chart
+  breakdownLabel?: string; // what the breakdown splits by, e.g. "by model, share of spend"
+  // [time ms, used %, 1 = estimated] for the chart. Built by main.ts from our readings + `curve`.
+  spark?: [number, number, number?][];
   forecast?: Forecast; // absent until we have enough history
+  // Usage over this window reconstructed from the provider's own event history (see src/backfill.ts),
+  // already pinned to usedPercent at the end. exact = from the provider's server (Cursor), not an estimate.
+  curve?: { t: number; p: number }[];
+  curveExact?: boolean;
+  daily?: { t: number; v: number }[]; // usage per local day, oldest first (today last)
+  dailyUnit?: "usd" | "tokens";
 }
 // "not_connected" = user hasn't set this provider up yet (show setup hint, not an error)
 export type Status = "ok" | "not_connected" | "error";

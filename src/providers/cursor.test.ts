@@ -67,3 +67,40 @@ test("enterprise accounts: a single 'overall' allowance, and idle team budget is
   assert.deepEqual(spent.meters.map((m) => m.label), ["Monthly usage", "Team on-demand"]);
   assert.deepEqual(parseUsageSummary({ isUnlimited: true, individualUsage: { overall: { used: 5, limit: 10 } } }).meters, []);
 });
+
+import { attachHistory } from "./cursor";
+import { parseEventsPage, weightOf } from "./cursorEvents";
+
+test("parseEventsPage: lenient numbers, empty answers, rejects error envelopes", () => {
+  const p = parseEventsPage({ totalUsageEventsCount: "2", usageEventsDisplay: [
+    { timestamp: "1741600000000", model: "claude-4.5-sonnet", chargedCents: 12.5, tokenUsage: { inputTokens: "100", outputTokens: 50, totalCents: "20" } },
+    { timestamp: 0, model: "junk" }, // no valid time: skipped
+  ] })!;
+  assert.equal(p.total, 2);
+  assert.deepEqual(p.events, [{ t: 1741600000000, charged: 12.5, list: 20, tokens: 150, model: "claude-4.5-sonnet" }]);
+  assert.deepEqual(parseEventsPage({}), { total: 0, events: [] });
+  assert.equal(parseEventsPage({ error: "nope" }), null);
+  assert.equal(parseEventsPage([1]), null);
+});
+
+test("weightOf prefers what the plan was charged, then list price, then tokens", () => {
+  const e = (charged: number, list: number, tokens: number) => ({ t: 1, charged, list, tokens, model: "m" });
+  assert.equal(weightOf([e(50, 80, 9)]).w(e(50, 80, 9)), 0.5);
+  assert.equal(weightOf([e(0, 80, 9)]).unit, "usd");
+  assert.equal(weightOf([e(0, 0, 9)]).unit, "tokens");
+});
+
+test("attachHistory: whole-cycle curve pinned to the reported %, daily spend, spend by model", () => {
+  const D = 86_400_000, now = Date.parse("2025-03-20T12:00:00Z");
+  const m = { label: "Monthly usage", usedPercent: 40, resetsAt: new Date(now + 10 * D).toISOString(), windowMinutes: 30 * 1440 };
+  const ev = (daysAgo: number, cents: number, model: string) => ({ t: now - daysAgo * D, charged: cents, list: 0, tokens: 1, model });
+  attachHistory([m as any], [ev(15, 300, "gpt-5"), ev(5, 100, "claude-4.5-sonnet"), ev(1, 100, "claude-4.5-sonnet"), ev(25, 999, "old")], now);
+  const curve = (m as any).curve as { t: number; p: number }[];
+  assert.equal((m as any).curveExact, true);
+  assert.equal(curve[0].p, 0);
+  assert.equal(curve[curve.length - 1].p, 40);    // pinned to Cursor's own number
+  assert.deepEqual((m as any).breakdown.map((b: any) => b.name), ["gpt-5", "claude-4.5-sonnet"]); // last cycle's event excluded
+  assert.equal((m as any).dailyUnit, "usd");
+  assert.equal((m as any).daily.length, 14);
+  assert.equal((m as any).daily.reduce((s: number, d: any) => s + d.v, 0), 2); // $1 + $1 within the last 14 days
+});

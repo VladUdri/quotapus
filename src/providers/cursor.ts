@@ -6,6 +6,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { parseRetryAfter } from "../backoff";
 import type { Provider, ProviderResult, QuotaMeter } from "./types";
+import { dailyTotals, eventCurve, shares } from "../backfill";
+import { CursorEvents, weightOf, type CursorEvent } from "./cursorEvents";
 
 // Cursor provider. Cursor is a VS Code fork: its login lives in a SQLite file ("state.vscdb") under
 // ~/Library/Application Support/Cursor. We read the access token (read-only, never refreshed or written),
@@ -141,7 +143,27 @@ async function readToken(): Promise<{ token: string } | { error: "not-installed"
 
 const result = (r: Partial<ProviderResult>): ProviderResult => ({ ...base, status: "ok", meters: [], ...r });
 
+// Cursor's request history -> the total meter's curve for the whole cycle (exact: server data), spend per
+// day, and where it went by model. Only the first (overall) meter: we can't tell which requests count
+// toward the Auto vs API sub-meters, so those keep quotapus' own readings.
+export function attachHistory(meters: QuotaMeter[], events: CursorEvent[], now: number) {
+  const m = meters[0];
+  if (!m || !events.length) return;
+  const { unit, w } = weightOf(events);
+  const weighted = events.map((e) => ({ t: e.t, w: w(e) }));
+  m.daily = dailyTotals(weighted, now, 14);
+  m.dailyUnit = unit;
+  if (!m.resetsAt || !m.windowMinutes) return;
+  const ws = Date.parse(m.resetsAt) - m.windowMinutes * 60_000;
+  const curve = eventCurve(weighted, ws, now, m.usedPercent);
+  if (curve) { m.curve = curve; m.curveExact = true; }
+  const inCycle = events.filter((e) => e.t >= ws);
+  const bd = shares(inCycle.map((e) => ({ key: e.model, w: w(e) })));
+  if (bd.length) { m.breakdown = bd; m.breakdownLabel = unit === "usd" ? "by model, share of spend" : "by model, share of tokens"; }
+}
+
 export function createCursor(dataDir: string): Provider {
+  const history = new CursorEvents(dataDir);
   const saveDebug = (label: string, json: unknown) => {
     try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(path.join(dataDir, "cursor-debug.json"), JSON.stringify({ label, shape: redact(json) }, null, 2)); } catch { /* ignore */ }
   };
@@ -173,6 +195,15 @@ export function createCursor(dataDir: string): Provider {
         if (!parsed.meters.length) {
           saveDebug("usage-summary", json);
           return result({ status: "error", message: `Cursor responded, but in a format I don't recognise. A redacted copy of its shape was saved to ${path.join(dataDir, "cursor-debug.json")} (contains no personal data).`, plan: parsed.plan });
+        }
+        // History is a bonus: if Cursor won't give it (some team plans may forbid it), the meters still show.
+        try {
+          const first = parsed.meters[0], now = Date.now();
+          const ws = first.resetsAt && first.windowMinutes ? Date.parse(first.resetsAt) - first.windowMinutes * 60_000 : now;
+          const events = await history.sync(headers.Cookie, Math.min(ws, now - 14 * 86_400_000), now, (j) => saveDebug("usage-events", j));
+          attachHistory(parsed.meters, events, now);
+        } catch (e) {
+          try { fs.writeFileSync(path.join(dataDir, "cursor-events-error.txt"), `${new Date().toISOString()} ${(e as Error).message}\n`); } catch { /* ignore */ }
         }
         return result({ plan: parsed.plan, meters: parsed.meters });
       } catch (e) {

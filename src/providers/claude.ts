@@ -5,6 +5,7 @@ import path from "node:path";
 import { parseRetryAfter } from "../backoff";
 import { readRateLimits } from "../statusline";
 import { LogScanner, summarize } from "../usageLogs";
+import { dailyTotals, eventCurve } from "../backfill";
 import type { Provider, ProviderResult, QuotaMeter } from "./types";
 
 const run = promisify(execFile);
@@ -25,14 +26,24 @@ async function readCreds(): Promise<Creds | null> {
   }
 }
 
-// "Where did it go" is a bonus: if the logs are missing or unreadable, the quota numbers still show.
+// Everything from Claude Code's local logs is a bonus: if they're missing or unreadable, the quota numbers still show.
+//  - "where it went" (tokens per project)
+//  - the usage curve's SHAPE over the window (main.ts uses it to fill stretches when quotapus wasn't running;
+//    marked as estimated, since the logs don't see claude.ai and Anthropic's formula is its own)
+//  - tokens per day for the last 14 days, on the weekly meters
 async function attachBreakdowns(meters: QuotaMeter[], models: Map<QuotaMeter, string | undefined>) {
   try {
-    await logs.scan(Date.now(), 8 * 24 * 3600_000);
+    const now = Date.now();
+    await logs.scan(now, 15 * 24 * 3600_000);
     for (const m of meters) {
       if (!m.resetsAt || !m.windowMinutes) continue;
       const since = Date.parse(m.resetsAt) - m.windowMinutes * 60_000; // start of the current window
-      m.breakdown = summarize(logs.entries.values(), since, models.get(m));
+      const model = models.get(m);
+      m.breakdown = summarize(logs.entries.values(), since, model);
+      const mine = [...logs.entries.values()].filter((e) => !model || e.model.includes(model));
+      const curve = eventCurve(mine.map((e) => ({ t: e.t, w: e.c })), since, now, m.usedPercent);
+      if (curve) m.curve = curve;
+      if (m.windowMinutes >= 7 * 1440) { m.daily = dailyTotals(mine.map((e) => ({ t: e.t, w: e.w })), now, 14); m.dailyUnit = "tokens"; }
     }
   } catch { /* ignore */ }
 }

@@ -7,7 +7,9 @@ import type { BreakdownItem } from "./providers/types";
 // Assistant lines carry token counts. We read ONLY counts, model and project folder name; prompt
 // and response text is parsed by JSON.parse but immediately discarded and never stored or sent anywhere.
 
-export interface Entry { t: number; project: string; model: string; w: number }
+// w = tokens (for "where it went"); c = rough cost weight (for the usage curve's shape). Output tokens cost
+// ~5x input and cache writes ~1.25x across Claude's price list, so c tracks quota burn better than raw tokens.
+export interface Entry { t: number; project: string; model: string; w: number; c: number }
 
 // Weight = tokens that actually cost quota. Cache *reads* are excluded: they're ~10x cheaper and
 // would otherwise dominate the numbers and hide what you actively worked on.
@@ -24,7 +26,8 @@ export function parseLine(line: string): { key: string; entry: Entry } | null {
   // The same API message is logged several times as it streams (and again when a session is resumed),
   // so we de-duplicate on message id + request id and keep the latest (largest) numbers.
   const key = `${o.message.id ?? o.uuid}|${o.requestId ?? ""}`;
-  return { key, entry: { t, project, model: String(o.message.model ?? ""), w } };
+  const c = (u.input_tokens ?? 0) + 5 * (u.output_tokens ?? 0) + 1.25 * (u.cache_creation_input_tokens ?? 0) + 0.1 * (u.cache_read_input_tokens ?? 0);
+  return { key, entry: { t, project, model: String(o.message.model ?? ""), w, c } };
 }
 
 const TEMP_DIRS = ["/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/"];
