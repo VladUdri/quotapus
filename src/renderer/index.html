@@ -159,6 +159,9 @@
   .seterr { display:flex; gap: 7px; color: var(--bad); font-size: 12px; padding: 4px 2px }
   .chips { display:flex; gap:4px; flex-wrap: wrap }
   .chips { flex-wrap: nowrap }
+  .set.col { flex-direction: column; align-items: stretch; gap: 7px }
+  .chip.day { width: 26px; padding: 0 }
+  .chip.learned { box-shadow: inset 0 0 0 1.5px var(--accent) } /* learned days: outlined, not filled */
   .chip { width:auto; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; background: var(--track); color: var(--fg); font-family: inherit }
   .chip.on, .chip.on:hover { background: var(--accent); color: #fff }
   .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--track); position: relative; padding: 0; flex:none; transition: background .15s }
@@ -278,7 +281,19 @@ const fcClass = (m) => {
   const f = m.forecast;
   return f && f.hitsBeforeReset && f.minutesToLimit != null ? (f.minutesToLimit < 30 ? "fc-bad" : "fc-warn") : "fc-none";
 };
-const projectedAt = (m, asOf, t) => clamp(m.usedPercent + ((m.forecast ? m.forecast.ratePerHour : 0) * (t - asOf)) / H);
+// Projected % at time t. Long windows follow the work pattern (main.ts sends the path: flat on days off);
+// otherwise a straight line at the recent rate.
+function projectedAt(m, asOf, t) {
+  const pr = m.forecast && m.forecast.work && m.forecast.work.proj;
+  if (pr && pr.length > 1) {
+    if (t <= pr[0][0]) return clamp(m.usedPercent);
+    for (let i = 1; i < pr.length; i++) if (pr[i][0] >= t) { const [ta, a] = pr[i - 1], [tb, b] = pr[i]; return clamp(a + ((t - ta) / (tb - ta || 1)) * (b - a)); }
+    return clamp(pr[pr.length - 1][1]);
+  }
+  return clamp(m.usedPercent + ((m.forecast ? m.forecast.ratePerHour : 0) * (t - asOf)) / H);
+}
+// The projection drawn as many short segments, so a work-pattern forecast shows its flat weekends.
+const projPoints = (m, asOf, a, b, n = 96) => Array.from({ length: n + 1 }, (_, i) => { const t = a + ((b - a) * i) / n; return [t, projectedAt(m, asOf, t)]; });
 
 const CLOSE = 95; // projected % at reset from which we call it "close" (status line and verdict agree)
 // One short status per meter, in plain words. cls "" = calm, "warn"/"bad" = needs attention.
@@ -391,15 +406,11 @@ function runway(m, W, zoomSpan, asOf) {
   const even = (t) => ((t - ws) / span) * 100;
   s("line", { x1: x(t0), y1: y(even(t0)), x2: x(t1), y2: y(even(t1)), class: "pace" }, plot);
 
-  // projection band (a heuristic: 0.7x..1.35x the current rate)
+  // projection band (a heuristic: 0.7x..1.35x the projected growth)
   const rate = f && f.ratePerHour > 0 ? f.ratePerHour : 0;
   if (rate && p < 100) {
-    const up = [], lo = [];
-    for (let i = 0; i <= 48; i++) {
-      const t = cur[0] + ((t1 - cur[0]) * i) / 48;
-      up.push([x(t), y(clamp(p + (rate * 1.35 * (t - cur[0])) / H))]);
-      lo.push([x(t), y(clamp(p + (rate * 0.7 * (t - cur[0])) / H))]);
-    }
+    const ahead = projPoints(m, cur[0], cur[0], t1, 64);
+    const up = ahead.map(([t, v]) => [x(t), y(clamp(p + (v - p) * 1.35))]), lo = ahead.map(([t, v]) => [x(t), y(clamp(p + (v - p) * 0.7))]);
     s("path", { d: pathD(up.concat(lo.reverse())) + "Z", class: "band" }, plot);
   }
   // locked out from the hit until the reset
@@ -428,14 +439,14 @@ function runway(m, W, zoomSpan, asOf) {
   // projection line + where it lands
   let endP = null;
   if (hit && p < 100) {
-    s("path", { d: pathD([[x(cur[0]), y(p)], [x(hit), y(100)]]), class: "proj" }, plot);
+    s("path", { d: pathD(projPoints(m, cur[0], cur[0], Math.min(hit, t1)).map(([t, v]) => [x(t), y(v)])), class: "proj" }, plot);
     s("circle", { cx: x(hit), cy: y(100), r: 3.5, class: "pdot" }, svg);
     const xh = x(hit), label = "Runs out ~" + dtfmt(hit), lw = label.length * 6;
     const anchor = xh > PW - lw / 2 ? "end" : xh < lw / 2 ? "start" : "middle";
     s("text", { x: anchor === "end" ? PW : anchor === "start" ? 0 : xh, y: y(100) - 8, class: "callout", "text-anchor": anchor }, svg, label);
   } else if (f && p < 100) {
     endP = projectedAt(m, cur[0], t1);
-    s("path", { d: pathD([[x(cur[0]), y(p)], [PW, y(endP)]]), class: "proj" }, plot);
+    s("path", { d: pathD(projPoints(m, cur[0], cur[0], t1).map(([t, v]) => [x(t), y(v)])), class: "proj" }, plot);
     s("circle", { cx: PW, cy: y(endP), r: 3, class: "pdot" }, svg);
     if (t1 === reset) { // label next to the end dot, wherever it doesn't cross the projection or even-pace line
       const label = "~" + Math.round(endP) + "% at reset", x1 = PW - 8, x0 = x1 - label.length * 6;
@@ -527,7 +538,13 @@ function verdict(m, asOf) {
   const v = el("div", "verdict");
   if (p >= 100) { v.append(el("b", "", "Limit reached."), " Resets " + dtfmt(reset) + ", in " + dur((reset - now) / MIN) + "."); return v; }
   if (!f) { v.textContent = "Collecting readings. A forecast appears after about 15 minutes."; return v; }
-  const hit = hitAt(m, asOf);
+  const hit = hitAt(m, asOf), w = f.work;
+  if (w) { // speaks in working days and a per-day budget
+    const lately = w.perDay > 0 ? "; lately " + amount(m, w.perDay) : "";
+    if (hit) v.append(el("b", "", "Runs out ~" + dtfmt(hit)), ", after " + workdays(w.lastsDays) + " (" + workdays(w.daysLeft) + " until the reset). To last, keep to " + amount(m, w.budgetPerDay) + " per working day" + lately + ".");
+    else v.append((projectedAt(m, asOf, reset) >= CLOSE ? "Close" : "On track") + ": ~" + Math.round(projectedAt(m, asOf, reset)) + "% by the reset. " + workdays(w.daysLeft, true) + " left (" + daysLabel(w.days) + "); you can use up to " + amount(m, w.budgetPerDay) + " per working day" + lately + ".");
+    return v;
+  }
   if (hit) {
     const unit = rateUnit(m), hoursLeft = Math.max((reset - now) / H, 1 / 60);
     const lasting = (100 - p) / hoursLeft;
@@ -541,11 +558,34 @@ function verdict(m, asOf) {
   return v;
 }
 
+// "Mon–Fri", "every day", "Mon, Wed, Thu" (weekdays are 0 = Sunday; the week is shown from Monday).
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function daysLabel(days) {
+  const order = [1, 2, 3, 4, 5, 6, 0].filter((d) => days.includes(d));
+  if (order.length === 7) return "every day";
+  if (!order.length) return "no days";
+  const idx = order.map((d) => (d + 6) % 7); // Monday = 0
+  const run = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+  return run && order.length >= 3 ? WD[order[0]] + "\u2013" + WD[order[order.length - 1]] : order.map((d) => WD[d]).join(", ");
+}
+const workdays = (n, cap) => { if (n == null) return "\u2014"; const r = n < 1 ? "<1" : String(Math.round(n)); const s = r + " working day" + (r === "1" ? "" : "s"); return cap ? s[0].toUpperCase() + s.slice(1) : s; };
+// A share of the quota, in dollars when we know what 1% costs (Cursor), else in %.
+const amount = (m, pct) => pct == null ? "\u2014" : m.usdPerPercent ? fmtUsd(pct * m.usdPerPercent) : (pct < 10 ? (Math.round(pct * 10) / 10) : Math.round(pct)) + "%";
+
 function stats(m, asOf) {
   const f = m.forecast, p = clamp(m.usedPercent), reset = Date.parse(m.resetsAt), now = Date.now();
   const evenRate = 100 / (m.windowMinutes / 60), unit = rateUnit(m);
   const st = (k, v, x, colored) => el("div", "stat", undefined, [el("div", "k", k), el("div", "v" + (colored ? " c" : ""), v), el("div", "x", x)]);
   const ratio = f ? f.ratePerHour / evenRate : 0;
+  if (f && f.work && p < 100) { // the work-pattern version: per working day, budget, working days left
+    const w = f.work, hit = hitAt(m, asOf);
+    return el("div", "stats", undefined, [
+      st("Per working day", amount(m, w.perDay), daysLabel(w.days) + (w.learned ? ", learned" : ", your setting")),
+      hit ? st("Runs out", "~" + dtfmt(hit), "after " + workdays(w.lastsDays), true)
+        : st("Budget", amount(m, w.budgetPerDay), "per workday, to last"),
+      st("Resets in", dur(Math.max(0, reset - now) / MIN), (w.daysLeft < 1 ? "<1" : Math.round(w.daysLeft)) + " workdays left"),
+    ]);
+  }
   const rate = !f ? st("Burn rate", "\u2014", "collecting data")
     : st("Burn rate", fmtRate(f.ratePerHour, unit), ratio > 1.15 ? ratio.toFixed(1) + "\u00D7 even pace" : ratio < 0.85 ? "below even pace" : "about even pace");
   const hit = hitAt(m, asOf);
@@ -613,7 +653,7 @@ function detail(key, m, asOf) {
 const fmtTokens = (v) => v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 1) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(Math.round(v));
 const fmtUsd = (v) => "$" + (v >= 100 ? Math.round(v) : v.toFixed(2));
 function dailyPanel(m) {
-  const days = m.daily, usd = m.dailyUnit === "usd", fmt = usd ? fmtUsd : (v) => fmtTokens(v) + " tokens";
+  const days = m.daily.slice(-14), usd = m.dailyUnit === "usd", fmt = usd ? fmtUsd : (v) => fmtTokens(v) + " tokens"; // 28 days arrive (for learning work days); 14 are shown
   const sum = (xs) => xs.reduce((a, b) => a + b.v, 0);
   const thisWeek = sum(days.slice(-7)), lastWeek = sum(days.slice(-14, -7));
   const busiest = days.reduce((a, b) => (b.v > a.v ? b : a));
@@ -812,6 +852,25 @@ function select(name, value, options, onChange) {
   sel.value = value; sel.setAttribute("aria-label", name); sel.onchange = () => onChange(sel.value);
   return setRow(name, null, el("div", "select", undefined, [sel, icon("chev")]));
 }
+// Auto = learned from history; tapping a day switches to your own choice, starting from what was learned.
+const workDaysRow = (save) => (p) => {
+  const auto = !p.workDays, current = p.workDays || p.learnedDays || [1, 2, 3, 4, 5];
+  const desc = auto ? (p.learnedDays ? "Learned from your history: " + daysLabel(p.learnedDays) + ". Forecasts skip the other days." : "Learning from your history (needs about two weeks). Tap days to set them now.")
+    : "Set by you: " + daysLabel(p.workDays) + ". Tap Auto to learn them instead.";
+  const chipsEl = el("div", "chips", undefined, [
+    (() => { const b = el("button", "chip" + (auto ? " on" : ""), "Auto"); b.setAttribute("aria-pressed", String(auto)); b.onclick = () => save({ workDays: { [p.id]: null } }); return b; })(),
+    ...[1, 2, 3, 4, 5, 6, 0].map((d) => {
+      const on = current.includes(d);
+      const b = el("button", "chip day" + (on ? (auto ? " learned" : " on") : ""), WD[d][0]);
+      b.title = WD[d]; b.setAttribute("aria-label", WD[d]); b.setAttribute("aria-pressed", String(!auto && on));
+      b.onclick = () => { const next = on ? current.filter((x) => x !== d) : [...current, d]; if (next.length) save({ workDays: { [p.id]: next } }); };
+      return b;
+    }),
+  ]);
+  const row = setRow(p.name, desc, chipsEl);
+  row.classList.add("col");
+  return row;
+};
 const section = (title, rows) => [el("div", "sec", title), el("div", "group", undefined, rows.filter(Boolean))];
 
 async function renderSettings(error) {
@@ -824,6 +883,8 @@ async function renderSettings(error) {
     error ? el("div", "seterr", undefined, [icon("alert"), el("span", "", error)]) : null,
     // One switch per provider. Off = never checked and never shown.
     ...section("Providers", (st.providers || []).map((p) => toggle(p.name, p.on, (v) => save({ providers: { [p.id]: v } }), p.detail))),
+    // Work days per provider: forecasts for weekly/monthly limits skip the days you don't work.
+    ...((st.providers || []).some((p) => p.on) ? section("Work days", (st.providers || []).filter((p) => p.on).map(workDaysRow(save))) : []),
     ...section("Menu bar", [
       toggle("Show percentage", st.showPercentInMenuBar, (v) => save({ showPercentInMenuBar: v })),
       meters.length > 1 ? select("Shows", st.menuBarMeter || meters[0].key, [...meters.map((m) => [m.key, m.name]), ["max", "Whichever is highest"]], (v) => save({ menuBarMeter: v })) : null,

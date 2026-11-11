@@ -8,6 +8,7 @@ import { loadConfig, saveConfig } from "./config";
 import { downsample, forecast } from "./forecast";
 import { History } from "./history";
 import { fillGaps, type Point } from "./backfill";
+import { activeDays, learnWeights, weightsFromDays, workdayForecast } from "./workdays";
 import { disable as disableStatusLine, enable as enableStatusLine, isEnabled as statusLineEnabled } from "./statusline";
 import { gaugeIcon } from "./trayIcon";
 import { createClaude } from "./providers/claude";
@@ -41,6 +42,7 @@ interface Snapshot {
 // Providers the user switched off are never fetched: no Keychain/login reads, no network, no card.
 const isOn = (id: string) => !config.disabledProviders.includes(id);
 const activeProviders = () => providers.filter((p) => isOn(p.id));
+const learnedDays = new Map<string, number[]>(); // per provider: weekdays it's actually used (0 = Sunday), for settings
 const seen = new Map<string, ProviderResult>(); // last raw result per provider (incl. hidden ones), for the settings page
 let latest: Snapshot = { results: [], updatedAt: 0, lastOkAt: 0, nextRefreshAt: 0, welcome: firstRun, activeProviders: activeProviders().length };
 let failures = 0;              // consecutive failed refreshes, drives backoff
@@ -149,6 +151,12 @@ function attachForecasts(results: ProviderResult[]) {
   const now = Date.now();
   for (const r of results) {
     if (r.status !== "ok" || r.stale) continue; // never learn from stale data
+    // Which days you work with this provider: set in Settings, else learned from its history (4 weeks of daily usage).
+    const daily = r.meters.find((m) => m.daily && m.daily.length >= 21)?.daily;
+    const learnedW = daily ? learnWeights(daily) : null;
+    if (learnedW) learnedDays.set(r.id, activeDays(learnedW));
+    const custom = config.workDays[r.id];
+    const weights = custom ? weightsFromDays(custom) : learnedW;
     for (const m of r.meters) {
       const samples = history.record(`${r.id}|${m.label}`, now, m.usedPercent, m.resetsAt);
       // The provider's own event history beats our readings: from the server (exact) it replaces them,
@@ -156,7 +164,9 @@ function attachForecasts(results: ProviderResult[]) {
       const start = m.resetsAt && m.windowMinutes ? Date.parse(m.resetsAt) - m.windowMinutes * 60_000 : NaN;
       const series: Point[] = m.curve && m.curveExact ? m.curve
         : m.curve && !Number.isNaN(start) ? fillGaps(samples, m.curve, start) : samples;
-      m.forecast ??= forecast(series, now, m.resetsAt);
+      // Long windows (weekly, monthly) follow the work pattern; a 5-hour session doesn't care about weekdays.
+      const work = weights && m.resetsAt && (m.windowMinutes ?? 0) >= 2 * 1440 ? workdayForecast(series, now, m.resetsAt, weights, !custom) : null;
+      m.forecast = work ?? m.forecast ?? forecast(series, now, m.resetsAt);
       m.spark ??= downsample(series, 160).map((x) => (x.est ? [x.t, x.p, 1] : [x.t, x.p]));
       delete m.curve; // the renderer only needs the merged series
     }
@@ -216,7 +226,7 @@ function readSettings() {
     launchAtLogin: autostartEnabled(), claudeStatusLine: statusLineEnabled(claudeSettings, dataDir),
     menuBarMeter: config.menuBarMeter === "max" ? "max" : picked ? `${picked.r.id}|${picked.m.label}` : "", meters,
     hasClaude: isOn("claude") && latest.results.some((r) => r.id === "claude"), version: app.getVersion(),
-    providers: providers.map((p) => ({ id: p.id, name: p.name, on: isOn(p.id), detail: providerDetail(p) })),
+    providers: providers.map((p) => ({ id: p.id, name: p.name, on: isOn(p.id), detail: providerDetail(p), workDays: config.workDays[p.id] ?? null, learnedDays: learnedDays.get(p.id) ?? null })),
   };
 }
 
@@ -226,6 +236,16 @@ function applySettings(p: Record<string, unknown>) {
   if (typeof p.notifications === "boolean") config.notifications = p.notifications;
   if (typeof p.launchAtLogin === "boolean") setAutostart(p.launchAtLogin);
   if (typeof p.menuBarMeter === "string" && p.menuBarMeter.length <= 200) config.menuBarMeter = p.menuBarMeter;
+  // { providerId: [weekdays] | null }: the days you work with it (null = learn them from history)
+  const wd = p.workDays;
+  if (wd && typeof wd === "object" && !Array.isArray(wd)) {
+    for (const [id, days] of Object.entries(wd)) {
+      if (!providers.some((x) => x.id === id)) continue;
+      if (days === null) delete config.workDays[id];
+      else if (Array.isArray(days) && days.length >= 1 && days.length <= 7 && days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) config.workDays[id] = [...new Set(days as number[])].sort();
+    }
+    blockedUntil = 0; latest.updatedAt = 0; refresh(); // re-forecast with the new days
+  }
   // { providerId: on/off }, only for providers that exist
   const pr = p.providers;
   if (pr && typeof pr === "object" && !Array.isArray(pr)) {

@@ -30,11 +30,11 @@ async function readCreds(): Promise<Creds | null> {
 //  - "where it went" (tokens per project)
 //  - the usage curve's SHAPE over the window (main.ts uses it to fill stretches when quotapus wasn't running;
 //    marked as estimated, since the logs don't see claude.ai and Anthropic's formula is its own)
-//  - tokens per day for the last 14 days, on the weekly meters
+//  - tokens per day for the last 28 days, on the weekly meters (the UI shows 14; 28 teach the weekday pattern)
 async function attachBreakdowns(meters: QuotaMeter[], models: Map<QuotaMeter, string | undefined>) {
   try {
     const now = Date.now();
-    await logs.scan(now, 15 * 24 * 3600_000);
+    await logs.scan(now, 29 * 24 * 3600_000); // Claude Code keeps ~30 days of logs
     for (const m of meters) {
       if (!m.resetsAt || !m.windowMinutes) continue;
       const since = Date.parse(m.resetsAt) - m.windowMinutes * 60_000; // start of the current window
@@ -43,7 +43,7 @@ async function attachBreakdowns(meters: QuotaMeter[], models: Map<QuotaMeter, st
       const mine = [...logs.entries.values()].filter((e) => !model || e.model.includes(model));
       const curve = eventCurve(mine.map((e) => ({ t: e.t, w: e.c })), since, now, m.usedPercent);
       if (curve) m.curve = curve;
-      if (m.windowMinutes >= 7 * 1440) { m.daily = dailyTotals(mine.map((e) => ({ t: e.t, w: e.w })), now, 14); m.dailyUnit = "tokens"; }
+      if (m.windowMinutes >= 7 * 1440) { m.daily = dailyTotals(mine.map((e) => ({ t: e.t, w: e.w })), now, 28); m.dailyUnit = "tokens"; }
     }
   } catch { /* ignore */ }
 }

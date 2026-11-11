@@ -151,13 +151,14 @@ export function attachHistory(meters: QuotaMeter[], events: CursorEvent[], now: 
   if (!m || !events.length) return;
   const { unit, w } = weightOf(events);
   const weighted = events.map((e) => ({ t: e.t, w: w(e) }));
-  m.daily = dailyTotals(weighted, now, 14);
+  m.daily = dailyTotals(weighted, now, 28); // 4 weeks: enough to learn which weekdays you work (src/workdays.ts)
   m.dailyUnit = unit;
   if (!m.resetsAt || !m.windowMinutes) return;
   const ws = Date.parse(m.resetsAt) - m.windowMinutes * 60_000;
   const curve = eventCurve(weighted, ws, now, m.usedPercent);
   if (curve) { m.curve = curve; m.curveExact = true; }
   const inCycle = events.filter((e) => e.t >= ws);
+  if (unit === "usd" && m.usedPercent > 0) m.usdPerPercent = inCycle.reduce((s, e) => s + w(e), 0) / m.usedPercent; // budgets in $
   const bd = shares(inCycle.map((e) => ({ key: e.model, w: w(e) })));
   if (bd.length) { m.breakdown = bd; m.breakdownLabel = unit === "usd" ? "by model, share of spend" : "by model, share of tokens"; }
 }
@@ -200,7 +201,7 @@ export function createCursor(dataDir: string): Provider {
         try {
           const first = parsed.meters[0], now = Date.now();
           const ws = first.resetsAt && first.windowMinutes ? Date.parse(first.resetsAt) - first.windowMinutes * 60_000 : now;
-          const events = await history.sync(headers.Cookie, Math.min(ws, now - 14 * 86_400_000), now, (j) => saveDebug("usage-events", j));
+          const events = await history.sync(headers.Cookie, Math.min(ws, now - 28 * 86_400_000), now, (j) => saveDebug("usage-events", j));
           attachHistory(parsed.meters, events, now);
         } catch (e) {
           try { fs.writeFileSync(path.join(dataDir, "cursor-events-error.txt"), `${new Date().toISOString()} ${(e as Error).message}\n`); } catch { /* ignore */ }

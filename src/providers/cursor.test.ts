@@ -101,6 +101,7 @@ test("attachHistory: whole-cycle curve pinned to the reported %, daily spend, sp
   assert.equal(curve[curve.length - 1].p, 40);    // pinned to Cursor's own number
   assert.deepEqual((m as any).breakdown.map((b: any) => b.name), ["gpt-5", "claude-4.5-sonnet"]); // last cycle's event excluded
   assert.equal((m as any).dailyUnit, "usd");
-  assert.equal((m as any).daily.length, 14);
-  assert.equal((m as any).daily.reduce((s: number, d: any) => s + d.v, 0), 2); // $1 + $1 within the last 14 days
+  assert.equal((m as any).daily.length, 28);
+  assert.equal(Math.round((m as any).daily.reduce((s: number, d: any) => s + d.v, 0) * 100), 1499); // all 4 events are within 28 days
+  assert.equal((m as any).usdPerPercent, 5 / 40); // $5 spent this cycle for 40%
 });

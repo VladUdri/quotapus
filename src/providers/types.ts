@@ -5,6 +5,16 @@ export interface Forecast {
   ratePerHour: number;           // recent burn rate, percentage points per hour (>= 0)
   minutesToLimit: number | null; // estimated minutes until 100%; null = not burning / not enough data
   hitsBeforeReset: boolean;      // true = at this pace the limit is reached before the window resets
+  // Long windows only: the forecast follows your weekly pattern (days off stay flat). See src/workdays.ts.
+  work?: {
+    days: number[];              // working days, 0 = Sunday
+    learned: boolean;            // true = learned from history, false = set in Settings
+    daysLeft: number;            // working days until the reset
+    perDay: number;              // % used on an average working day, lately
+    budgetPerDay: number | null; // % per working day that would last exactly until the reset
+    lastsDays: number | null;    // working days the remaining quota lasts at the current pace
+    proj: [number, number][];    // projected [time, %] until the limit or the reset
+  };
 }
 // "Where did it go": share of recent token use per project (top few + "Other").
 export interface BreakdownItem { name: string; path?: string; share: number } // path = full folder, for a tooltip // share = 0-100
@@ -24,6 +34,7 @@ export interface QuotaMeter {
   curveExact?: boolean;
   daily?: { t: number; v: number }[]; // usage per local day, oldest first (today last)
   dailyUnit?: "usd" | "tokens";
+  usdPerPercent?: number; // what 1% of this meter costs, when known (Cursor), to show budgets in dollars
 }
 // "not_connected" = user hasn't set this provider up yet (show setup hint, not an error)
 export type Status = "ok" | "not_connected" | "error";
