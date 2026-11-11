@@ -256,25 +256,43 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, "renderer/index.html"), { hash: process.env.QUOTAPUS_VIEW }); // dev: settings | expand
   win.on("blur", () => win.hide()); // click away = close, like a native popover
+  // Belong to every Space (incl. full-screen apps): showing the popup must never make macOS switch desktops.
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true }); // skip...: keeps the Dock icon hidden
 }
 
 // Tallest the popup may get: 720, or less if the screen below the menu bar is shorter. Past that, content scrolls.
+// With several displays every menu bar shows the icon, but tray.getBounds() reports just one of them.
+// So we anchor to the icon that was actually clicked (the click event's bounds); for opens that don't come
+// from a click (menu, first run) we use the display under the mouse pointer.
+let anchor: Electron.Rectangle | null = null;
+function anchorRect(): Electron.Rectangle {
+  if (anchor) return anchor;
+  const t = tray.getBounds(), cursor = screen.getCursorScreenPoint();
+  const d = screen.getDisplayNearestPoint(cursor);
+  // the tray's x within its own display, moved to the pointer's display (menu bars line up the same way)
+  const home = screen.getDisplayNearestPoint({ x: t.x, y: t.y });
+  return home.id === d.id ? t : { ...t, x: d.bounds.x + (t.x - home.bounds.x), y: d.bounds.y + (t.y - home.bounds.y) };
+}
+const displayOf = (r: Electron.Rectangle) => screen.getDisplayNearestPoint({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+
 function maxHeight() {
-  const t = tray.getBounds(), area = screen.getDisplayNearestPoint({ x: t.x, y: t.y }).workArea;
+  const t = anchorRect(), area = displayOf(t).workArea;
   return Math.max(300, Math.min(720, area.y + area.height - (t.y + t.height + 4) - 12));
 }
 
-function showWindow() {
-  const t = tray.getBounds();
+function showWindow(clicked?: Electron.Rectangle) {
+  anchor = clicked && clicked.width > 0 ? clicked : null;
+  const t = anchorRect(), area = displayOf(t).workArea;
   const w = win.getBounds();
-  win.setPosition(Math.round(t.x + t.width / 2 - w.width / 2), t.y + t.height + 4);
+  const x = Math.min(Math.max(Math.round(t.x + t.width / 2 - w.width / 2), area.x + 8), area.x + area.width - w.width - 8); // stay on that screen
+  win.setPosition(x, t.y + t.height + 4);
   win.show();
 }
 
 app.whenReady().then(async () => {
   app.dock?.hide(); // menu-bar only, no dock icon
   tray = new Tray(gaugeIcon(null));
-  tray.on("click", () => (win.isVisible() ? win.hide() : showWindow()));
+  tray.on("click", (_e, bounds) => (win.isVisible() ? win.hide() : showWindow(bounds)));
   tray.on("right-click", () => tray.popUpContextMenu(buildMenu()));
   createWindow();
 
