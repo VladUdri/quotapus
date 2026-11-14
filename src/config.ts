@@ -13,11 +13,12 @@ export interface Config {
   menuBarMeter: string;         // "<provider id>|<meter label>", "max" = highest, "" = first meter
   disabledProviders: string[];  // provider ids switched off in settings (a list of "off", so new providers start on)
   workDays: Record<string, number[]>; // provider id -> weekdays you work with it (0 = Sunday); absent = learned from history
+  checkForUpdates: boolean;     // ask github.com once a day whether a newer release exists
 }
 
 const defaults: Config = {
   onboarded: false, showPercentInMenuBar: true, notifications: true,
-  notifyAt: [80, 95], refreshSeconds: 300, notified: [], menuBarMeter: "", disabledProviders: [], workDays: {},
+  notifyAt: [80, 95], refreshSeconds: 300, notified: [], menuBarMeter: "", disabledProviders: [], workDays: {}, checkForUpdates: true,
 };
 
 // Lives in ~/Library/Application Support/quotapus, so it survives reinstalls/updates

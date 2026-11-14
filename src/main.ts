@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeTheme, screen } from "electron";
+import { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeTheme, screen, shell } from "electron";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ import { fillGaps, type Point } from "./backfill";
 import { activeDays, learnWeights, weightsFromDays, workdayForecast } from "./workdays";
 import { disable as disableStatusLine, enable as enableStatusLine, isEnabled as statusLineEnabled } from "./statusline";
 import { gaugeIcon } from "./trayIcon";
+import { RELEASES_URL, isNewer, latestVersion, runInstaller } from "./updates";
 import { createClaude } from "./providers/claude";
 import { createCursor } from "./providers/cursor";
 import { mock, mockCursor } from "./providers/mock";
@@ -38,6 +39,8 @@ interface Snapshot {
   nextRefreshAt: number; // when we'll try again
   welcome: boolean;
   activeProviders: number; // providers switched on in settings (0 = the user turned them all off)
+  // A newer release exists. canInstall = we can update in place (installed by install.sh); else we link to the release.
+  update?: { version: string; canInstall: boolean; busy?: boolean; error?: string };
 }
 // Providers the user switched off are never fetched: no Keychain/login reads, no network, no card.
 const isOn = (id: string) => !config.disabledProviders.includes(id);
@@ -195,6 +198,33 @@ function notify(results: ProviderResult[]) {
 }
 
 
+// ---- updates ----
+// The providers' endpoints are unofficial and will change one day; when that breaks every installed copy,
+// this is how people find out a fix exists. One anonymous request to github.com a day, off switch in Settings.
+// In-place update only for the install.sh layout; a copy run from source or from a DMG gets a link instead.
+const canInstall = app.getAppPath().startsWith(path.join(os.homedir(), "Applications/Quotapus.app") + path.sep);
+const pushSnapshot = () => { if (win && !win.isDestroyed()) win.webContents.send("quota:updated", latest); };
+async function checkForUpdate() {
+  if (!config.checkForUpdates) { if (latest.update) { delete latest.update; pushSnapshot(); } return; }
+  if (latest.update?.busy) return;
+  const v = process.env.QUOTAPUS_MOCK_UPDATE ?? (process.env.QUOTAPUS_MOCK ? null : await latestVersion()); // dev: QUOTAPUS_MOCK_UPDATE=9.9.9
+  if (!v || !isNewer(v, app.getVersion()) || !config.checkForUpdates) return; // a failed check keeps what we knew
+  if (latest.update?.version === v) return;
+  latest.update = { version: v, canInstall };
+  pushSnapshot();
+}
+async function runUpdate() {
+  const u = latest.update;
+  if (!u || u.busy) return;
+  if (!u.canInstall || process.env.QUOTAPUS_MOCK) { shell.openExternal(RELEASES_URL); return; }
+  latest.update = { ...u, busy: true, error: undefined };
+  pushSnapshot();
+  // On success the installer stops this app and starts the new one, so we only get here when it failed.
+  const why = await runInstaller(path.join(dataDir, "update.log"));
+  latest.update = { ...u, error: `Update didn't finish. ${why} Try "quotapus update" in Terminal.` };
+  pushSnapshot();
+}
+
 // ---- menu (right-click the tray icon, or the ⋯ button in the popup) ----
 function buildMenu() {
   const toggle = (label: string, key: "showPercentInMenuBar" | "notifications") => ({
@@ -203,6 +233,7 @@ function buildMenu() {
   });
   return Menu.buildFromTemplate([
     { label: `quotapus v${app.getVersion()}`, enabled: false }, // handy for "which build is actually running?"
+    ...(latest.update ? [{ label: latest.update.canInstall ? `Update to v${latest.update.version}` : `v${latest.update.version} is available…`, enabled: !latest.update.busy, click: () => { runUpdate(); } }] : []),
     { type: "separator" },
     { label: "Refresh now", click: () => refresh() },
     { label: "Settings…", click: () => { showWindow(); win.webContents.send("ui:settings"); } },
@@ -217,12 +248,12 @@ function buildMenu() {
 
 // ---- settings (the popup's settings view talks to these two handlers) ----
 function readSettings() {
-  const { showPercentInMenuBar, notifications, notifyAt, refreshSeconds } = config;
+  const { showPercentInMenuBar, notifications, notifyAt, refreshSeconds, checkForUpdates } = config;
   // Choices for "Menu bar shows": every meter we currently know about.
   const meters = latest.results.filter((r) => r.status === "ok").flatMap((r) => r.meters.map((m) => ({ key: `${r.id}|${m.label}`, name: `${r.name} · ${m.label}` })));
   const picked = trayMeter();
   return {
-    showPercentInMenuBar, notifications, notifyAt, refreshSeconds: Math.max(refreshSeconds, MIN_REFRESH_SEC),
+    showPercentInMenuBar, notifications, notifyAt, checkForUpdates, refreshSeconds: Math.max(refreshSeconds, MIN_REFRESH_SEC),
     launchAtLogin: autostartEnabled(), claudeStatusLine: statusLineEnabled(claudeSettings, dataDir),
     menuBarMeter: config.menuBarMeter === "max" ? "max" : picked ? `${picked.r.id}|${picked.m.label}` : "", meters,
     hasClaude: isOn("claude") && latest.results.some((r) => r.id === "claude"), version: app.getVersion(),
@@ -235,6 +266,10 @@ function applySettings(p: Record<string, unknown>) {
   if (typeof p.showPercentInMenuBar === "boolean") config.showPercentInMenuBar = p.showPercentInMenuBar;
   if (typeof p.notifications === "boolean") config.notifications = p.notifications;
   if (typeof p.launchAtLogin === "boolean") setAutostart(p.launchAtLogin);
+  if (typeof p.checkForUpdates === "boolean" && p.checkForUpdates !== config.checkForUpdates) {
+    config.checkForUpdates = p.checkForUpdates;
+    checkForUpdate(); // on: look now; off: drop the notice
+  }
   if (typeof p.menuBarMeter === "string" && p.menuBarMeter.length <= 200) config.menuBarMeter = p.menuBarMeter;
   // { providerId: [weekdays] | null }: the days you work with it (null = learn them from history)
   const wd = p.workDays;
@@ -328,11 +363,14 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle("settings:get", readSettings);
   ipcMain.handle("settings:set", (_e, p) => applySettings(p ?? {}));
+  ipcMain.handle("update:run", runUpdate);
   ipcMain.on("ui:hide", () => win.hide());
   ipcMain.on("ui:quit", () => app.quit());
   ipcMain.on("ui:resize", (_e, h: number) => win.setContentSize(WIN_W, Math.max(120, Math.min(maxHeight(), Math.ceil(h)))));
 
   await refresh();
+  setTimeout(checkForUpdate, process.env.QUOTAPUS_MOCK_UPDATE ? 0 : 15_000); // not during startup
+  setInterval(checkForUpdate, 24 * 3600_000);
 
   // First launch: open the popup by itself so the user sees where the app lives.
   if (firstRun) { showWindow(); config.onboarded = true; saveConfig(config); }

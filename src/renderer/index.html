@@ -143,6 +143,11 @@
   .welcome { position: relative; padding-right: 36px }
   .welcome .x { position: absolute; top: 8px; right: 8px }
   .welcome .msg { display: block; color: var(--dim) }
+  /* "A newer version exists": one quiet line with a button, above the providers */
+  .update { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px 9px 14px }
+  .update .title { font-weight: 500; margin-bottom: 0 }
+  .update .msg { color: var(--dim); font-size: 12px; margin-top: 1px }
+  .update button.action { flex: none }
   .skel .track { stroke: var(--track) }
   .bar { height: 10px; border-radius: 5px; background: var(--track) }
 
@@ -901,12 +906,22 @@ async function renderSettings(error) {
     ...section("General", [
       toggle("Launch at login", st.launchAtLogin, (v) => save({ launchAtLogin: v })),
       chips("Check every", [5, 10, 15].map((m) => ({ label: m + " min", on: st.refreshSeconds === m * 60, click: () => save({ refreshSeconds: m * 60 }) }))),
+      toggle("Check for updates", st.checkForUpdates, (v) => save({ checkForUpdates: v }), "Asks github.com once a day. You choose when to install."),
     ]),
   ].filter(Boolean));
   renderFooter();
   fit();
 }
 function back() { view = "main"; render(data); }
+
+// A newer release exists. Installed copies update in place (the app restarts); others get a link to the release.
+function updateCard(u) {
+  const b = el("button", "action", u.busy ? "Updating…" : u.canInstall ? (u.error ? "Try again" : "Update") : "View release");
+  b.disabled = Boolean(u.busy);
+  b.onclick = () => window.quota.update();
+  const sub = u.error || (u.busy ? "quotapus will restart by itself in a moment." : u.canInstall ? "You have v" + version + ". Updating takes a few seconds." : "You have v" + version + ".");
+  return el("div", "card update", undefined, [el("div", "", undefined, [el("div", "title", "quotapus " + u.version + " is available"), el("div", "msg", sub)]), b]);
+}
 
 function render(d) {
   data = d;
@@ -924,6 +939,7 @@ function render(d) {
     kids.push(el("div", "card welcome", undefined, [el("div", "title", "Welcome to quotapus"),
       el("div", "msg", "This panel lives in your menu bar. Click any meter to see when it will run out and where the usage went. The gear below opens settings."), x]));
   }
+  if (d.update) kids.push(updateCard(d.update));
   if (!d.updatedAt) kids.push(skeleton());
   else if (!d.results.length) {
     const allOff = d.activeProviders === 0;

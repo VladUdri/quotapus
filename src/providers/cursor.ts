@@ -12,7 +12,7 @@ import { CursorEvents, weightOf, type CursorEvent } from "./cursorEvents";
 // Cursor provider. Cursor is a VS Code fork: its login lives in a SQLite file ("state.vscdb") under
 // ~/Library/Application Support/Cursor. We read the access token (read-only, never refreshed or written),
 // and call cursor.com's usage endpoint the same way Cursor's own settings page does.
-// NOTE: undocumented API, written from public reverse-engineering notes; see AGENTS.md ("unverified").
+// NOTE: undocumented API, written from public reverse-engineering notes and not yet verified against every plan type.
 
 const run = promisify(execFile);
 const base = { id: "cursor", name: "Cursor" };

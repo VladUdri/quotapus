@@ -1,0 +1,325 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- The promo video's "set": a 1920x1080 page that plays one scripted story in real time while
+     scripts/make-promo.js records it. The popup is the real renderer (src/renderer/index.html) in an iframe,
+     fed mock data through a fake window.quota. -->
+<style>
+  :root { --ink:#0d0b1a; --fg:#f5f5f7; --dim:rgba(245,245,247,.62); --violet:#7a3de0; --coral:#e5609a; --bad:#ff6961 }
+  * { box-sizing: border-box; margin: 0 }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ink); color: var(--fg);
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif; -webkit-font-smoothing: antialiased }
+  .scene { position: absolute; inset: 0; opacity: 0 }
+  .dark { background: radial-gradient(900px 600px at 50% 120%, rgba(122,61,224,.35), transparent 70%), radial-gradient(700px 500px at 100% 0%, rgba(229,96,154,.18), transparent 70%), var(--ink) }
+  .center { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center }
+  .mono { font-family: "SF Mono", Menlo, monospace }
+
+  /* 1. Hook */
+  .term { width: 1100px; border-radius: 18px; background: #16131f; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 40px 120px rgba(0,0,0,.5); text-align: left; overflow: hidden }
+  .term .bar { height: 44px; display: flex; gap: 10px; align-items: center; padding: 0 18px; background: rgba(255,255,255,.04) }
+  .term .bar i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,.18) }
+  .term .body { padding: 34px 40px 40px; font-size: 30px; line-height: 1.7; min-height: 260px }
+  .term .p { color: #b9a6ff } .term .work { color: var(--dim) }
+  .term .err { color: var(--bad); font-weight: 600; opacity: 0 }
+  .caret { display: inline-block; width: 15px; height: 34px; background: var(--fg); vertical-align: -6px; margin-left: 3px; animation: blink 1s steps(1) infinite }
+  @keyframes blink { 50% { opacity: 0 } }
+  #hookLine { font-size: 64px; font-weight: 700; margin-top: 70px; letter-spacing: -1px; opacity: 0 }
+
+  /* 2. Logo */
+  #logo img { width: 230px; height: 230px }
+  #logo h1 { font-size: 132px; font-weight: 800; letter-spacing: -4px; margin-top: 10px }
+  #logo p, #cta .tag { font-size: 44px; color: var(--dim); margin-top: 18px; font-weight: 500 }
+  .grad { background: linear-gradient(90deg, #a98bff, #ff8fbd); -webkit-background-clip: text; color: transparent }
+
+  /* 3. Desktop */
+  .wall { position: absolute; inset: 0; background:
+    radial-gradient(1300px 900px at 10% 95%, #5a2bb8 0%, transparent 60%),
+    radial-gradient(1100px 800px at 95% 10%, #b3407a 0%, transparent 58%),
+    radial-gradient(900px 700px at 60% 60%, #2c1a5e 0%, transparent 70%), linear-gradient(135deg, #120d29, #261036) }
+  .menubar { position: absolute; top: 0; left: 0; right: 0; height: 38px; display: flex; align-items: center; gap: 30px; padding: 0 22px;
+    background: rgba(18,12,36,.5); backdrop-filter: blur(30px) saturate(1.6); font-size: 17px; color: rgba(255,255,255,.92) }
+  .menubar b { font-weight: 700 } .menubar .sp { flex: 1 }
+  .mi { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px; border-radius: 7px; font-weight: 500 }
+  .mi.on { background: rgba(255,255,255,.22) }
+  .batt { width: 30px; height: 14px; border: 2px solid rgba(255,255,255,.85); border-radius: 4px; position: relative; padding: 2px }
+  .batt::before { content: ""; display: block; height: 100%; width: 72%; background: rgba(255,255,255,.9); border-radius: 1px }
+  .batt::after { content: ""; position: absolute; right: -5px; top: 3px; width: 3px; height: 5px; background: rgba(255,255,255,.85); border-radius: 0 2px 2px 0 }
+  .caption { position: absolute; left: 110px; top: 360px; width: 800px }
+  .caption h2 { font-size: 72px; font-weight: 750; letter-spacing: -2px; line-height: 1.05 }
+  .caption p { font-size: 34px; color: rgba(255,255,255,.75); margin-top: 22px; line-height: 1.35; font-weight: 450 }
+  .step { font-size: 22px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: #ffb3d1; margin-bottom: 18px }
+  #pop { position: absolute; top: 46px; width: 770px; height: 300px; border-radius: 17px; overflow: hidden; opacity: 0;
+    background: rgba(36,32,44,.78); backdrop-filter: blur(40px) saturate(1.8); border: 1px solid rgba(255,255,255,.14);
+    box-shadow: 0 30px 90px rgba(0,0,0,.55), 0 0 0 .5px rgba(0,0,0,.6); transition: height .28s cubic-bezier(.3,.7,.2,1); transform-origin: 70% 0 }
+  #pop iframe { border: 0; width: 440px; height: 300px; transform: scale(1.75); transform-origin: 0 0; display: block; background: transparent }
+  .notif { position: absolute; top: 54px; right: 22px; width: 640px; display: flex; gap: 18px; align-items: center; padding: 20px 22px; border-radius: 26px;
+    background: rgba(40,36,50,.78); backdrop-filter: blur(40px) saturate(1.8); border: 1px solid rgba(255,255,255,.14); box-shadow: 0 24px 70px rgba(0,0,0,.45); opacity: 0 }
+  .notif img { width: 58px; height: 58px; flex: none }
+  .notif > div { padding-right: 44px }
+  .notif .t { font-size: 22px; font-weight: 700; line-height: 1.25 } .notif .b { font-size: 20px; color: rgba(255,255,255,.75); margin-top: 3px }
+  .later { position: absolute; right: 22px; top: 200px; font-size: 22px; font-weight: 600; padding: 10px 20px; border-radius: 30px; background: rgba(255,255,255,.12); color: rgba(255,255,255,.85); opacity: 0 }
+  .notif .now { position: absolute; right: 22px; top: 18px; font-size: 16px; color: rgba(255,255,255,.5) }
+  #cursor { position: absolute; left: 0; top: 0; width: 34px; height: 50px; z-index: 50; opacity: 0; filter: drop-shadow(0 2px 4px rgba(0,0,0,.45)); pointer-events: none }
+  .ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.8); z-index: 49; pointer-events: none }
+
+  /* 4. Trust */
+  #trust h2 { font-size: 76px; font-weight: 750; letter-spacing: -2px; margin-bottom: 70px }
+  .tiles { display: grid; grid-template-columns: repeat(4, 360px); gap: 28px }
+  .tile { text-align: left; padding: 36px 34px; border-radius: 24px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09); opacity: 0 }
+  .tile svg { width: 46px; height: 46px; stroke: #c4b0ff; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+  .tile h3 { font-size: 32px; font-weight: 700; margin-top: 22px } .tile p { font-size: 23px; color: var(--dim); margin-top: 10px; line-height: 1.35 }
+
+  /* 5. Call to action */
+  #cta img { width: 190px; height: 190px }
+  #cta h1 { font-size: 120px; font-weight: 800; letter-spacing: -3px; margin-top: 4px }
+  .meta { margin-top: 64px; display: flex; gap: 18px }
+  .meta span { font-size: 28px; font-weight: 600; padding: 14px 30px; border-radius: 40px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); color: #e9e4ff }
+</style>
+
+<section id="hook" class="scene dark center">
+  <div class="term"><div class="bar"><i></i><i></i><i></i></div>
+    <div class="body mono"><div><span class="p">❯</span> <span id="typed"></span><span class="caret" id="caret"></span></div>
+      <div class="work" id="work"></div><div class="err" id="err">✕ Usage limit reached. Resets in 3h 12m.</div></div></div>
+  <div id="hookLine">You never saw it coming.</div>
+</section>
+
+<section id="logo" class="scene dark center">
+  <img src="../../assets/icon.png" alt="">
+  <h1>quotapus</h1>
+  <p>Know how much AI you have left, <span class="grad">and when you'll run out.</span></p>
+</section>
+
+<section id="desk" class="scene">
+  <div class="wall"></div>
+  <div class="menubar"><b>Terminal</b><span>Shell</span><span>Edit</span><span>View</span><span>Window</span><span>Help</span><span class="sp"></span>
+    <span class="mi" id="tray"><svg width="22" height="22" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11.5" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3.4"/>
+      <circle cx="16" cy="16" r="11.5" fill="none" stroke="#fff" stroke-width="3.4" stroke-dasharray="26.7 100" transform="rotate(-90 16 16)" id="trayArc"/></svg><span id="trayPct">37%</span></span>
+    <span class="mi"><span class="batt"></span></span><span class="mi" id="clock"></span></div>
+  <div class="caption" id="cap"><div class="step" id="capStep"></div><h2 id="capH"></h2><p id="capP"></p></div>
+  <div id="pop"><iframe id="frame"></iframe></div>
+  <div class="notif" id="notif"><img src="../../assets/icon.png" alt=""><div><div class="t">Claude: 5-hour session may run out in ~25&nbsp;min</div>
+    <div class="b">At your current pace, before it resets.</div></div><span class="now">now</span></div>
+  <div class="later" id="later">About an hour later</div>
+</section>
+
+<section id="trust" class="scene dark center">
+  <h2>Free, private, and honest.</h2>
+  <div class="tiles">
+    <div class="tile"><svg viewBox="0 0 24 24"><path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/></svg><h3>Open source</h3><p>Free, MIT licensed. Read every line.</p></div>
+    <div class="tile"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><h3>No account</h3><p>Uses the logins already on your Mac.</p></div>
+    <div class="tile"><svg viewBox="0 0 24 24"><path d="M9.9 4.2A10 10 0 0 1 12 4c7 0 10 8 10 8a13 13 0 0 1-1.7 2.7M6.6 6.6A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.4-1.6M2 2l20 20"/></svg><h3>No tracking</h3><p>No analytics, no server of ours.</p></div>
+    <div class="tile"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><h3>Never silently wrong</h3><p>Old numbers are marked as old.</p></div>
+  </div>
+</section>
+
+<section id="cta" class="scene dark center">
+  <img src="../../assets/icon.png" alt="">
+  <h1>quotapus</h1>
+  <div class="tag">For Claude and Cursor, in your Mac's menu bar.</div>
+  <div class="meta"><span>Free</span><span>Open source</span><span>macOS</span></div>
+</section>
+
+<svg id="cursor" viewBox="0 0 24 34"><path d="M2 2v26l6.5-6.2 4.3 9.6 4.4-2-4.2-9.3H22z" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const EASE = "cubic-bezier(.45,0,.2,1)";
+const anim = (el, frames, ms, easing = "ease-out", delay = 0) => el.animate(frames, { duration: ms, easing, delay, fill: "both" }).finished;
+const show = (el, ms = 600) => anim(el, [{ opacity: 0 }, { opacity: 1 }], ms);
+const hide = (el, ms = 500) => anim(el, [{ opacity: 1 }, { opacity: 0 }], ms);
+// Fade up into place. `delay` (not a wait before calling) keeps the element hidden until it starts: no flash, no jump.
+const rise = (el, ms = 700, dy = 30, delay = 0) => anim(el, [{ opacity: 0, transform: `translateY(${dy}px)` }, { opacity: 1, transform: "none" }], ms, "cubic-bezier(.2,.7,.2,1)", delay);
+const popIn = (el, ms, from, delay = 0) => anim(el, [{ opacity: 0, transform: from }, { opacity: 1, transform: "none" }], ms, "cubic-bezier(.2,.8,.25,1)", delay);
+
+// ---- the popup: the real renderer, fed by a fake window.quota ----
+const S = 1.75, MAXH = Math.floor((1080 - 46 - 14) / S); // the popup scrolls past this, like the real one
+let real, onUpdate = () => {};
+// First render with empty meters so the rings and bars fill up when the popup opens.
+const empty = (snap) => ({ ...snap, results: snap.results.map((r) => ({ ...r, meters: r.meters.map((m) => ({ ...m, usedPercent: 0, forecast: undefined })) })) });
+window.fakeQuota = {
+  get: async () => empty(real), refresh: async () => real, onUpdate: (cb) => { onUpdate = cb; },
+  action: async () => ({ ok: true }), getSettings: async () => ({ notifyAt: [80, 95], version: "" }), setSettings: async () => ({}),
+  onOpenSettings() {}, update() {}, hide() {}, quit() {},
+  resize: (h) => { const v = Math.min(MAXH, Math.ceil(h)); $("frame").style.height = v + "px"; $("pop").style.height = v * S + "px"; },
+};
+const doc = () => $("frame").contentDocument;
+// iframe element -> stage coordinates (the popup is scaled by S)
+function toStage(r, fx = 0.5, fy = 0.5) {
+  const f = $("frame").getBoundingClientRect();
+  return { x: f.left + (r.left + r.width * fx) * S, y: f.top + (r.top + r.height * fy) * S };
+}
+
+// ---- cursor ----
+const cur = { x: 1000, y: 720 };
+const placeCursor = () => { $("cursor").style.transform = `translate(${cur.x - 3}px, ${cur.y - 3}px)`; };
+function moveTo(x, y, ms = 900) {
+  const from = { ...cur }, t0 = performance.now();
+  return new Promise((done) => {
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2; // ease in-out cubic
+      cur.x = from.x + (x - from.x) * e; cur.y = from.y + (y - from.y) * e; placeCursor();
+      k < 1 ? requestAnimationFrame(step) : done();
+    };
+    requestAnimationFrame(step);
+  });
+}
+async function click() {
+  const r = document.createElement("div"); r.className = "ripple"; r.style.left = cur.x + "px"; r.style.top = cur.y + "px"; document.body.append(r);
+  r.animate([{ transform: "scale(.4)", opacity: 1 }, { transform: "scale(1.4)", opacity: 0 }], { duration: 450, easing: "ease-out" }).finished.then(() => r.remove());
+  await anim($("cursor"), [{ scale: 1 }, { scale: .85 }, { scale: 1 }], 160);
+}
+// Glide across the chart; the popup's own tooltip follows (synthetic mousemove inside the iframe).
+async function sweep(target, f0, f1, ms) {
+  const d = doc(), W = d.defaultView, t0 = performance.now();
+  await new Promise((done) => {
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const b = target.getBoundingClientRect(), f = f0 + (f1 - f0) * e;
+      const ix = b.left + b.width * f, iy = b.top + b.height * 0.45;
+      const p = toStage({ left: ix, top: iy, width: 0, height: 0 }); cur.x = p.x; cur.y = p.y; placeCursor();
+      target.dispatchEvent(new W.MouseEvent("mousemove", { clientX: ix, clientY: iy, bubbles: true }));
+      k < 1 ? requestAnimationFrame(step) : done();
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+async function caption(step, h, p) {
+  const c = $("cap");
+  if (c.textContent.trim()) await anim(c, [{ opacity: 1 }, { opacity: 0, transform: "translateY(-14px)" }], 260, "ease-in");
+  $("capStep").textContent = step; $("capH").textContent = h; $("capP").textContent = p;
+  await rise(c, 650, 24);
+}
+
+async function typeText(el, text, perChar = 38) { for (const ch of text) { el.textContent += ch; await wait(perChar); } }
+
+// ---- the story ----
+async function play() {
+  // 1. Hook
+  await show($("hook"), 500);
+  await typeText($("typed"), "finish the billing refactor before the demo");
+  await wait(250); $("caret").remove();
+  for (const s of ["Reading 14 files…", "Editing billing/invoice.ts…"]) { const d = document.createElement("div"); d.textContent = s; $("work").append(d); await rise(d, 300, 8); await wait(380); }
+  await wait(200);
+  promo.mark("err");
+  await anim($("err"), [{ opacity: 0, transform: "translateX(-8px)" }, { opacity: 1, transform: "none" }], 300);
+  await wait(600);
+  await rise($("hookLine"), 600, 20);
+  await wait(1300);
+  await hide($("hook"), 450);
+
+  // 2. Logo
+  const logo = $("logo");
+  for (const x of logo.children) x.style.opacity = 0;
+  logo.style.opacity = 1;
+  promo.mark("logo");
+  await Promise.all([
+    popIn(logo.querySelector("img"), 900, "scale(.8) rotate(-12deg)"),
+    rise(logo.querySelector("h1"), 800, 30, 200),
+    rise(logo.querySelector("p"), 800, 30, 500),
+  ]);
+  await wait(1700);
+  await hide(logo, 450);
+
+  // 3. Desktop
+  const desk = $("desk"), pop = $("pop"), tray = $("tray");
+  const tb = tray.getBoundingClientRect();
+  pop.style.left = Math.min(1920 - 440 * S - 14, tb.left + tb.width / 2 - 440 * S / 2) + "px";
+  placeCursor();
+  promo.mark("desk");
+  await show(desk, 600);
+  await Promise.all([show($("cursor"), 300), caption("Menu bar", "Every AI limit, one click away.", "Claude and Cursor, side by side. No account, no setup.")]);
+  await moveTo(tb.left + 16, tb.top + tb.height / 2, 1000);
+  await click();
+  tray.classList.add("on");
+  pop.style.opacity = 1;
+  anim(pop, [{ opacity: 0, transform: "translateY(-10px) scale(.98)" }, { opacity: 1, transform: "none" }], 220);
+  await wait(160);
+  onUpdate(real); // rings and bars fill
+  await wait(500);
+  await moveTo(1000, 700, 900);
+  await wait(1500);
+
+  await caption("Forecast", "Knows when you'll run out.", "From your recent pace: “Runs out in ~1h 39m”, before the limit hits you.");
+  const hero = doc().querySelector(".hero");
+  const hp = toStage(hero.getBoundingClientRect(), 0.25, 0.5);
+  await moveTo(hp.x, hp.y, 800);
+  await click(); hero.click();
+  await wait(350);
+  const app = doc().getElementById("app"), detail = doc().querySelector(".detail");
+  if (detail) app.scrollTo({ top: app.scrollTop + detail.getBoundingClientRect().top - 70, behavior: "smooth" });
+  await wait(1100);
+  const chart = [...doc().querySelectorAll("rect")].find((x) => x.getAttribute("fill") === "transparent");
+  if (chart) {
+    const a = toStage(chart.getBoundingClientRect(), 0.12, 0.45);
+    await moveTo(a.x, a.y, 600);
+    await sweep(chart, 0.12, 0.9, 3000);
+    await wait(500);
+    chart.dispatchEvent(new (doc().defaultView.MouseEvent)("mouseleave"));
+  }
+  await moveTo(960, 820, 700);
+  await wait(600);
+
+  await caption("Where it went", "Shows which project used it.", "Read locally from Claude Code's logs. Token counts only, never your prompts.");
+  const leg = doc().querySelector(".leg2");
+  if (leg) {
+    const delta = leg.getBoundingClientRect().bottom + 30 - app.clientHeight;
+    if (delta > 0) app.scrollTo({ top: app.scrollTop + delta, behavior: "smooth" });
+    await wait(700);
+    const lp = toStage(leg.getBoundingClientRect(), 0.3, 0.5);
+    await moveTo(lp.x, lp.y + 12, 900);
+  }
+  await wait(2000);
+
+  await caption("Alerts", "Warns you while there's still time.", "A heads-up when a limit is about 30 minutes from running out.");
+  await moveTo(820, 900, 900);
+  await click();
+  tray.classList.remove("on");
+  await anim(pop, [{ opacity: 1 }, { opacity: 0, transform: "translateY(-6px)" }], 200);
+  await rise($("later"), 400, 10);
+  await wait(900);
+  hide($("later"), 300);
+  await anim($("notif"), [{ opacity: 0, transform: "translateX(120px)" }, { opacity: 1, transform: "none" }], 500, "cubic-bezier(.2,.9,.25,1)");
+  await wait(2600);
+  await Promise.all([hide(desk, 500), hide($("cursor"), 300)]);
+
+  // 4. Trust
+  const trust = $("trust");
+  trust.querySelector("h2").style.opacity = 0;
+  trust.style.opacity = 1;
+  promo.mark("trust");
+  const tiles = [...trust.querySelectorAll(".tile")];
+  await Promise.all([rise(trust.querySelector("h2"), 600), ...tiles.map((t, i) => rise(t, 650, 40, 450 + i * 170))]);
+  await wait(2600);
+  await hide(trust, 450);
+
+  // 5. Call to action
+  const cta = $("cta");
+  for (const x of cta.children) x.style.opacity = 0;
+  cta.style.opacity = 1;
+  promo.mark("cta");
+  await Promise.all([
+    popIn(cta.querySelector("img"), 800, "scale(.85)"),
+    rise(cta.querySelector("h1"), 750, 30, 150),
+    rise(cta.querySelector(".tag"), 750, 30, 350),
+    rise(cta.querySelector(".meta"), 750, 30, 750),
+  ]);
+  await wait(4200);
+}
+
+(async () => {
+  real = await promo.snapshot();
+  $("clock").textContent = new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/,/g, "");
+  const pct = Math.round(real.results[0].meters[0].usedPercent);
+  $("trayPct").textContent = pct + "%"; $("trayArc").setAttribute("stroke-dasharray", `${(pct / 100) * 2 * Math.PI * 11.5} 100`);
+  const html = await promo.popupHtml();
+  $("frame").srcdoc = html.replace('<meta charset="utf-8">', '<meta charset="utf-8"><script>window.quota = parent.fakeQuota<\/script>');
+  await new Promise((r) => $("frame").addEventListener("load", r, { once: true }));
+  await document.fonts.ready;
+  await wait(800); // let the hidden popup lay out
+  promo.start();
+  await wait(300);
+  await play();
+  promo.done();
+})().catch((e) => promo.fail(String(e && e.stack || e)));
+</script>

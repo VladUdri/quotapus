@@ -1,9 +1,21 @@
 node_modules
 dist
-.DS_Store
-.cache
 release
+.cache
+.DS_Store
+*.log
+.env*
+.vscode/
+.idea/
 
-# Private working notes (kept locally, never published)
-IDEAS.md
+# Local only, never published: notes, ideas, AI assistant files and conversations, generated videos
 AGENTS.md
+IDEAS.md
+CLAUDE.md
+CLAUDE.local.md
+*.local.md
+.claude/
+.cursor/
+.aider*
+/notes/
+/promo/

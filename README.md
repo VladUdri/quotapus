@@ -30,6 +30,8 @@ forecasts when you'll hit the limit, and shows which projects used it.
   or less away.
 - **Clear about stale data.** If a refresh fails, the last values stay visible with a warning, and the menu bar
   shows `~37%` instead of `37%`.
+- **Tells you about updates.** When a newer version exists, the popup shows it with an **Update** button.
+  Nothing installs by itself.
 - **No setup.** Uses the logins Claude Code and Cursor already have on your Mac. No account, no server, no telemetry.
 
 ## Install
@@ -47,6 +49,9 @@ findable with Spotlight), adds a `quotapus` command to `~/.local/bin`, and start
 ```bash
 quotapus start | stop | update | uninstall
 ```
+
+The app checks for a newer release once a day and offers it in the popup (**Update** does the same as
+`quotapus update`). Turn this off under Settings > General > Check for updates.
 
 `uninstall` also restores your original Claude Code status line (if you enabled "Read limits from Claude Code") and deletes quotapus's settings and history.
 
@@ -88,8 +93,10 @@ Both usage endpoints are unofficial and may change without notice.
 
 ## Privacy
 
-quotapus connects only to `api.anthropic.com` and `cursor.com`, using logins already on your Mac. It never
-refreshes or modifies those logins and has no analytics. Claude Code's logs are read locally for token counts,
+quotapus reads your usage only from `api.anthropic.com` and `cursor.com`, using logins already on your Mac. It
+never refreshes or modifies those logins and has no analytics. Once a day it asks `github.com` whether a newer
+release exists: a request with no login and no data about you (GitHub sees your IP address, as with any request), which you can switch off in settings.
+Installing an update downloads from GitHub, like the first install. Claude Code's logs are read locally for token counts,
 model names, and project folder names only, never prompt text. All data quotapus stores is in
 `~/Library/Application Support/quotapus`.
 
@@ -103,6 +110,8 @@ QUOTAPUS_SNAPSHOT=/tmp/x.png npm start    # save a screenshot of the popup and q
 ```
 
 To regenerate `assets/demo.gif`, run `npm run build`, then `node_modules/.bin/electron scripts/make-demo.js`.
+For the 1080p promo video (`promo/quotapus-promo.mp4`, not committed), run `node_modules/.bin/electron scripts/make-promo.js` after a build.
+The website's silent hero loop is a clip of it: `PROMO_CLIP="desk+1.6,trust-0.5" PROMO_POSTER_AT=3.5 PROMO_BITRATE=1.6e6 node_modules/.bin/electron scripts/make-promo.js site/media/loop.mp4`.
 
 Releases are published by GitHub Actions when a `vX.Y.Z` tag is pushed.
 

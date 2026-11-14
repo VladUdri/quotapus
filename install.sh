@@ -91,8 +91,12 @@ chmod +x "$BIN/quotapus.new" && mv -f "$BIN/quotapus.new" "$BIN/quotapus"
 
 case ":$PATH:" in
   *":$BIN:"*) ;;
-  *) echo "export PATH=\"$BIN:\$PATH\"" >> "$HOME/.zshrc"; export PATH="$BIN:$PATH"
-     echo "Added $BIN to PATH in ~/.zshrc (open a new terminal to use \`quotapus\`)." ;;
+  *) # Updates started from the app run with a bare PATH, so also check the file before adding the line again.
+     if ! grep -qsF "$BIN" "$HOME/.zshrc"; then
+       echo "export PATH=\"$BIN:\$PATH\"" >> "$HOME/.zshrc"
+       echo "Added $BIN to PATH in ~/.zshrc (open a new terminal to use \`quotapus\`)."
+     fi
+     export PATH="$BIN:$PATH" ;;
 esac
 
 "$BIN/quotapus" start
