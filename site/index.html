@@ -4,98 +4,376 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>quotapus: know how much AI you have left</title>
-<meta name="description" content="A macOS menu bar app that shows your Claude and Cursor usage and forecasts when you'll run out.">
+<meta name="description" content="A free, open-source macOS menu bar app that shows your Claude and Cursor limits and warns you before you run out.">
+<meta property="og:title" content="quotapus">
+<meta property="og:description" content="Know how much AI you have left. Claude and Cursor limits in your Mac's menu bar, with a warning before you run out.">
+<meta property="og:image" content="media/loop-poster.jpg">
+<meta name="theme-color" content="#0e0c16" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfaff" media="(prefers-color-scheme: light)">
 <link rel="icon" href="icon.png">
 <style>
-  :root { --bg:#fbfbfd; --fg:#1d1d1f; --dim:#6e6e73; --line:rgba(0,0,0,.1); --card:#fff; --accent:#5b4bdb; --accent-fg:#fff; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#111113; --fg:#f5f5f7; --dim:#a1a1a6; --line:rgba(255,255,255,.12); --card:#1c1c1e; --accent:#8b7dff; --accent-fg:#111; } }
+  :root {
+    --bg: #fbfaff; --fg: #17151f; --dim: #5f5b6b; --faint: #8a8597;
+    --line: rgba(23, 21, 31, .09); --card: #ffffff; --chip: #f1eff7;
+    --indigo: #6c4cf1; --coral: #ef5f8a; --amber: #b87300; --green: #2f9e52; --red: #d6455d;
+    --accent: #5b3fe0; --accent-fg: #fff;
+    --shadow: 0 1px 2px rgba(30, 20, 60, .05), 0 12px 40px rgba(30, 20, 60, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e0c16; --fg: #f3f1f8; --dim: #a6a2b3; --faint: #7d7889;
+      --line: rgba(255, 255, 255, .09); --card: #17141f; --chip: #231f2f;
+      --amber: #f5b34a; --green: #5fd17a; --red: #f06b7e;
+      --accent: #8d79ff; --accent-fg: #0e0c16;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 20px 60px rgba(0, 0, 0, .35);
+    }
+  }
   * { box-sizing: border-box }
-  body { margin:0; background:var(--bg); color:var(--fg); font: 17px/1.55 -apple-system, system-ui, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased }
-  main { max-width: 980px; margin: 0 auto; padding: 0 24px }
-  .hero { text-align:center; padding: 72px 0 40px }
-  .hero img.icon { width: 96px; height: 96px }
-  h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.08; letter-spacing: -0.02em; margin: 20px 0 14px }
-  .sub { color: var(--dim); font-size: 20px; max-width: 560px; margin: 0 auto 32px }
-  .cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap }
-  button, .btn { font: inherit; font-size: 16px; border-radius: 12px; padding: 12px 20px; cursor: pointer; text-decoration:none; border: 1px solid var(--line) }
-  .primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600 }
-  .secondary { background: var(--card); color: var(--fg) }
-  .secondary[aria-disabled="true"] { opacity: .55; cursor: default }
-  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace }
-  .cmd { margin: 22px auto 0; max-width: 640px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; text-align:left; word-break: break-all }
-  .note { color: var(--dim); font-size: 14px; margin-top: 14px }
-  .shot { display:block; margin: 48px auto 0; width: min(440px, 100%); border-radius: 16px; border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0,0,0,.18) }
-  .features { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; margin: 72px 0 }
-  .feature { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 22px }
-  .feature h3 { margin: 0 0 6px; font-size: 18px }
-  .feature p { margin: 0; color: var(--dim); font-size: 15.5px }
-  h2 { font-size: 28px; letter-spacing: -0.01em; margin: 0 0 12px }
-  section.row { display:grid; grid-template-columns: 1fr 1fr; gap: 32px; margin: 0 0 72px }
-  @media (max-width: 700px) { section.row { grid-template-columns: 1fr } }
-  section.row p, section.row li { color: var(--dim) }
-  ol { padding-left: 20px; margin: 8px 0 0 }
-  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--dim); font-size: 14px; display:flex; justify-content: space-between; flex-wrap: wrap; gap: 8px }
+  html { scroll-behavior: smooth; scroll-padding-top: 72px }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden }
+  a { color: inherit }
+  code { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace; font-size: .86em }
+  p code, li code, dd code { background: var(--chip); padding: 1px 6px; border-radius: 5px; white-space: nowrap }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px }
+  @media (max-width: 560px) { .wrap { padding: 0 16px } }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+  /* nav */
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: saturate(1.6) blur(16px); -webkit-backdrop-filter: saturate(1.6) blur(16px); background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 1px solid transparent; transition: border-color .2s }
+  nav.scrolled { border-bottom-color: var(--line) }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.01em; text-decoration: none; font-size: 18px }
+  .brand img { width: 28px; height: 28px }
+  nav .links { display: flex; gap: 24px; margin-left: auto; font-size: 15px }
+  nav .links a { text-decoration: none; color: var(--dim) }
+  nav .links a:hover { color: var(--fg) }
+  .gh { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; text-decoration: none; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--card) }
+  .gh:hover { border-color: color-mix(in srgb, var(--fg) 25%, transparent) }
+  @media (max-width: 760px) { nav .links { display: none } .gh { margin-left: auto } }
+
+  /* hero */
+  .hero { text-align: center; padding: 72px 0 0; position: relative }
+  .hero::before { content: ""; position: absolute; left: 50%; top: -60px; width: 1100px; height: 700px; transform: translateX(-50%); z-index: -1; pointer-events: none;
+    background: radial-gradient(45% 45% at 35% 40%, color-mix(in srgb, var(--indigo) 13%, transparent), transparent 70%), radial-gradient(35% 40% at 70% 50%, color-mix(in srgb, var(--coral) 10%, transparent), transparent 70%) }
+  .eyebrow { display: inline-block; font-size: 13.5px; color: var(--dim); padding: 5px 13px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--card) 70%, transparent) }
+  h1 { font-size: clamp(42px, 7vw, 76px); line-height: 1.02; letter-spacing: -.038em; margin: 22px auto 18px; font-weight: 750; max-width: 12em }
+  .grad { background: linear-gradient(100deg, var(--indigo), var(--coral)); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em }
+  .lede { font-size: clamp(18px, 2.2vw, 21px); color: var(--dim); max-width: 34em; margin: 0 auto 30px }
+  .lede strong { color: var(--fg); font-weight: 600 }
+
+  .cmd { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px 8px 8px 16px; box-shadow: var(--shadow); max-width: 600px; margin: 0 auto; text-align: left }
+  .cmd code { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; color: var(--dim) }
+  .cmd code::-webkit-scrollbar { display: none }
+  .cmd .p { color: var(--faint); user-select: none }
+  .cmd .k { color: var(--fg) }
+  .copy { flex: none; font: inherit; font-size: 14px; font-weight: 600; border: 0; border-radius: 9px; padding: 9px 14px; background: var(--accent); color: var(--accent-fg); cursor: pointer; min-width: 84px; transition: transform .1s }
+  .copy:active { transform: scale(.97) }
+  .meta { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 20px; margin-top: 16px; font-size: 14px; color: var(--faint) }
+  .meta a { color: var(--dim); text-decoration: none }
+  .meta a:hover { color: var(--fg) }
+
+  .screen { position: relative; margin: 56px auto 0; border-radius: 18px; overflow: hidden; background: #150f2a; aspect-ratio: 16 / 9; box-shadow: 0 2px 4px rgba(20, 10, 50, .08), 0 40px 100px -20px rgba(40, 20, 90, .35); border: 1px solid var(--line) }
+  .screen video { display: block; width: 100%; height: 100% }
+  .pause { position: absolute; right: 14px; bottom: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .25); background: rgba(20, 14, 36, .55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; cursor: pointer; display: grid; place-items: center; opacity: .75; transition: opacity .2s }
+  .pause:hover, .pause:focus-visible { opacity: 1 }
+  .pause svg { width: 14px; height: 14px }
+  .caption { text-align: center; color: var(--faint); font-size: 14px; margin: 14px 0 0 }
+
+  /* sections */
+  section { padding: 104px 0 0 }
+  .kicker { font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--accent) }
+  h2 { font-size: clamp(30px, 4vw, 42px); line-height: 1.1; letter-spacing: -.025em; margin: 10px 0 14px; font-weight: 720; max-width: 18em }
+  .intro { color: var(--dim); font-size: 18.5px; max-width: 36em; margin: 0 }
+  .head { margin-bottom: 40px }
+
+  /* features */
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 18px }
+  .f { grid-column: span 3; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 26px; display: flex; flex-direction: column; gap: 6px }
+  .f.s2 { grid-column: span 2 }
+  .f .viz { min-height: 110px; margin-bottom: 18px }
+  .f h3 { margin: auto 0 0; font-size: 19px; letter-spacing: -.01em }
+  .f p { margin: 0; color: var(--dim); font-size: 15.5px }
+  @media (max-width: 900px) { .f, .f.s2 { grid-column: span 6 } .f .viz { min-height: 0 } }
+  .viz { font-size: 14px; display: flex; flex-direction: column; justify-content: center; gap: 10px }
+  .warn { color: var(--amber); font-weight: 600 }
+  .line { display: flex; align-items: baseline; gap: 10px }
+  .line .t { font-weight: 600 }
+  .line .n { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums }
+  .s { color: var(--faint) }
+  .meter { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden }
+  .meter i { display: block; height: 100% }
+  .stack { display: flex; gap: 3px; height: 14px }
+  .stack i { border-radius: 4px; background: var(--fg) }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--dim); font-size: 13.5px }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--fg); margin-right: 6px; opacity: var(--o) }
+  .days { display: flex; gap: 6px }
+  .days span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--indigo) 16%, transparent) }
+  .days span.off { background: none; border: 1px dashed color-mix(in srgb, var(--fg) 20%, transparent); color: var(--faint) }
+  .big { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums }
+  .mbars { display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+  .mbar { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: var(--chip); font-weight: 600; font-variant-numeric: tabular-nums }
+  .mbar svg { width: 14px; height: 14px }
+  .chart { width: 100%; height: auto; display: block }
+
+  /* faq */
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 56px; margin: 0 }
+  .faq div { padding: 22px 0; border-top: 1px solid var(--line) }
+  .faq dt { font-weight: 650; font-size: 17px; margin-bottom: 6px }
+  .faq dd { margin: 0; color: var(--dim); font-size: 15.5px }
+  @media (max-width: 800px) { .faq { grid-template-columns: 1fr } }
+
+  /* privacy */
+  .hosts { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; margin-bottom: 36px }
+  .hosts div { display: grid; grid-template-columns: 220px 1fr; gap: 16px; padding: 16px 22px; background: var(--card); align-items: baseline }
+  .hosts code { font-size: 14.5px; font-weight: 600; color: var(--fg) }
+  .hosts span { color: var(--dim); font-size: 15.5px }
+  @media (max-width: 640px) { .hosts div { grid-template-columns: 1fr; gap: 2px } }
+  .notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px }
+  .notes h3 { margin: 0 0 6px; font-size: 17px }
+  .notes p { margin: 0; color: var(--dim); font-size: 15.5px }
+  @media (max-width: 800px) { .notes { grid-template-columns: 1fr; gap: 22px } }
+
+  /* install */
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 24px; padding: 48px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; box-shadow: var(--shadow); position: relative; overflow: hidden }
+  .box::after { content: ""; position: absolute; right: -120px; top: -120px; width: 360px; height: 360px; border-radius: 50%; background: radial-gradient(color-mix(in srgb, var(--coral) 12%, transparent), transparent 70%); pointer-events: none }
+  @media (max-width: 860px) { .box { grid-template-columns: minmax(0, 1fr); padding: 28px 20px; gap: 32px } }
+  .box .cmd { margin: 26px 0 0 }
+  .box h3 { font-size: 15px; margin: 0 0 12px }
+  ul.changes { list-style: none; padding: 0; margin: 0 0 28px; display: grid; gap: 10px; font-size: 15px; color: var(--dim) }
+  ul.changes li { padding-left: 18px; position: relative }
+  ul.changes code { white-space: normal; overflow-wrap: anywhere }
+  ul.changes li::before { content: ""; position: absolute; left: 2px; top: .65em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .7 }
+  .cli { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; background: var(--chip); border-radius: 12px; padding: 14px 16px; font-size: 14.5px; color: var(--dim); align-items: baseline }
+  .cli code { color: var(--fg); font-weight: 600; white-space: nowrap }
+  @media (max-width: 480px) { .cli { grid-template-columns: 1fr; gap: 0 } .cli span { margin-bottom: 8px } }
+  .small { color: var(--faint); font-size: 14px; margin: 16px 0 0 }
+
+  footer { padding: 72px 0 56px; color: var(--faint); font-size: 14px }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px }
+  footer .row { display: contents }
+  footer a { text-decoration: none; color: var(--dim) }
+  footer a:hover { color: var(--fg) }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s cubic-bezier(.2, .8, .2, 1) }
+  .reveal.in { opacity: 1; transform: none }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto }
+    .reveal { opacity: 1; transform: none; transition: none }
+  }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ring" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="2.2"/><circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="2.2" pathLength="100" stroke-dasharray="37 100" transform="rotate(-90 8 8)"/></symbol>
+  <symbol id="gh" viewBox="0 0 16 16"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.130-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.590.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 14 14"><rect x="2.5" y="1.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="8.5" y="1.5" width="3" height="11" rx="1" fill="currentColor"/></symbol>
+  <symbol id="i-play" viewBox="0 0 14 14"><path d="M3.5 1.5v11l9-5.5z" fill="currentColor"/></symbol>
+</svg>
+
+<nav id="nav">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt="">quotapus</a>
+    <div class="links"><a href="#features">Features</a><a href="#faq">How it works</a><a href="#privacy">Privacy</a><a href="#install">Install</a></div>
+    <a class="gh" href="https://github.com/VladUdri/quotapus"><svg width="16" height="16" aria-hidden="true"><use href="#gh"/></svg>GitHub</a>
+  </div>
+</nav>
+
 <main>
   <header class="hero">
-    <img class="icon" src="icon.png" alt="">
-    <h1>Know how much AI<br>you have left.</h1>
-    <p class="sub">quotapus shows your Claude and Cursor usage in the Mac menu bar and forecasts when you'll run out.</p>
-    <div class="cta">
-      <button class="primary" id="copy">Copy install command</button>
+    <div class="wrap">
+      <span class="eyebrow">Free and open source · macOS 11 or later</span>
+      <h1>Know how much AI you have <span class="grad">left.</span></h1>
+      <p class="lede">quotapus sits in your menu bar, shows what's left of your Claude and Cursor limits, and <strong>warns you before you run out</strong>, not after.</p>
+      <div class="cmd">
+        <code><span class="p">$ </span><span class="k">curl -fsSL</span> https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh <span class="k">| bash</span></code>
+        <button class="copy" type="button">Copy</button>
+      </div>
+      <div class="meta">
+        <span>Paste into Terminal · Apple Silicon and Intel</span>
+        <a href="https://github.com/VladUdri/quotapus/blob/main/install.sh">Read install.sh first</a>
+      </div>
+
+      <div class="screen">
+        <video id="loop" muted loop playsinline preload="metadata" poster="media/loop-poster.jpg" aria-label="Demo: the quotapus popup opens from the menu bar, shows a forecast chart and which project used the quota, then a notification warns that the limit is 25 minutes away">
+          <source src="media/loop.mp4" type="video/mp4">
+        </video>
+        <button class="pause" id="pause" type="button" aria-label="Pause the demo"><svg><use href="#i-pause"/></svg></button>
+      </div>
+      <p class="caption">Demo with sample data.</p>
     </div>
-    <div class="cmd"><code id="cmd">curl -fsSL https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh | bash</code></div>
-    <p class="note">macOS · Apple Silicon and Intel · free and open source (MIT). Paste the command into Terminal.</p>
-    <picture>
-      <source srcset="shot-dark.png" media="(prefers-color-scheme: dark)">
-      <img class="shot" src="shot-light.png" alt="The quotapus popup: a 5-hour session at 37% with a chart projecting when the limit will be reached">
-    </picture>
   </header>
 
-  <div class="features">
-    <div class="feature"><h3>Will I run out?</h3><p>A forecast from your recent pace, such as "Runs out in ~1h 39m". Shown only when the limit would be reached before the quota resets.</p></div>
-    <div class="feature"><h3>A chart you can read</h3><p>The whole quota window at a glance: usage so far, the projected path, and the pace that would make it last.</p></div>
-    <div class="feature"><h3>Where it went</h3><p>See which project folders used your Claude tokens. Read locally from Claude Code's logs. Token counts only, never prompt text.</p></div>
-  </div>
+  <section id="features">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="kicker">Features</div>
+        <h2>Where you're heading, not just where you are.</h2>
+      </div>
 
-  <section class="row">
-    <div>
-      <h2>Stays out of the way</h2>
-      <p>A gauge in the menu bar, a click for details, and notifications at the thresholds you choose. If a refresh fails, the last values stay visible and are marked as out of date.</p>
-    </div>
-    <div>
-      <h2>Private</h2>
-      <p>quotapus uses the logins Claude Code and Cursor already have on your Mac and connects only to Anthropic and Cursor. It never modifies those logins, has no analytics, and needs no account.</p>
+      <div class="grid">
+        <article class="f reveal">
+          <div class="viz">
+            <div class="line"><span class="t">5-hour session</span><span class="warn">Runs out in ~1h 39m</span></div>
+            <svg class="chart" viewBox="0 0 320 96" aria-hidden="true">
+              <line x1="0" y1="8" x2="320" y2="8" stroke="currentColor" stroke-opacity=".15"/>
+              <rect x="208" y="8" width="112" height="80" fill="var(--red)" fill-opacity=".1"/>
+              <line x1="0" y1="88" x2="320" y2="8" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="2 4"/>
+              <path d="M0 88 L18 84 32 82 46 78 60 74 74 75 88 68 102 64 114 66 128 58 140 57" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linejoin="round"/>
+              <line x1="140" y1="57" x2="208" y2="8" stroke="var(--amber)" stroke-width="2.2" stroke-dasharray="5 4"/>
+              <circle cx="208" cy="8" r="4.5" fill="var(--amber)"/><circle cx="140" cy="57" r="4" fill="var(--green)"/>
+            </svg>
+          </div>
+          <h3>Will I run out?</h3>
+          <p>A forecast from your recent pace, shown only when the limit would arrive before the reset. A notification when it's about 30 minutes away, plus alerts at 80% and 95% (or thresholds you pick).</p>
+        </article>
+
+        <article class="f reveal">
+          <div class="viz">
+            <div class="line"><span class="t">Where it went</span><span class="s">share of tokens</span></div>
+            <div class="stack"><i style="flex:62"></i><i style="flex:25;opacity:.5"></i><i style="flex:13;opacity:.22"></i></div>
+            <div class="legend"><span style="--o:1">quotapus 62%</span><span style="--o:.5">blog 25%</span><span style="--o:.22">Other 13%</span></div>
+          </div>
+          <h3>See which project used it</h3>
+          <p>Token share per project folder, read on your Mac from Claude Code's logs: counts only, never your prompts. For Cursor (experimental): spend per day and by model.</p>
+        </article>
+
+        <article class="f s2 reveal">
+          <div class="viz">
+            <div class="days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span class="off">S</span><span class="off">S</span></div>
+            <div><span class="big">$4.66</span> <span class="s">per working day · Cursor</span></div>
+          </div>
+          <h3>Plans around your week</h3>
+          <p>Learns which days you work (after two weeks), or you set them, so weekly and monthly budgets skip your days off.</p>
+        </article>
+
+        <article class="f s2 reveal">
+          <div class="viz">
+            <div class="mbars"><span class="mbar"><svg aria-hidden="true"><use href="#ring"/></svg>37%</span><span class="s" aria-hidden="true">→</span><span class="mbar"><svg aria-hidden="true"><use href="#ring"/></svg>~37%</span></div>
+            <span style="color:var(--amber);font-size:13.5px">Last updated 12m ago · retry in 5m</span>
+          </div>
+          <h3>Honest about stale data</h3>
+          <p>If a refresh fails you keep the last values, clearly marked, and the menu bar shows <code>~37%</code>. Never blank, never silently wrong.</p>
+        </article>
+
+        <article class="f s2 reveal">
+          <div class="viz">
+            <div class="line"><span class="t">Weekly (Opus)</span><span class="n">93%</span></div>
+            <div class="meter"><i style="width:93%;background:var(--red)"></i></div>
+            <div class="line"><span class="t">Monthly plan</span><span class="n">46%</span></div>
+            <div class="meter"><i style="width:46%;background:var(--green)"></i></div>
+          </div>
+          <h3>All your limits in one place</h3>
+          <p>Claude's 5-hour, weekly and per-model limits next to Cursor's plan and on-demand spend.</p>
+        </article>
+      </div>
     </div>
   </section>
 
-  <section class="row">
-    <div>
-      <h2>Getting started</h2>
-      <ol>
-        <li>Run the install command in Terminal. It installs <code>Quotapus.app</code> into <code>~/Applications</code> (find it with Spotlight) and starts it. Node is not required.</li>
-        <li>Sign in to Claude Code or Cursor if you haven't already.</li>
-        <li>Click the gauge icon in the menu bar. Use the gear for settings, including launch at login.</li>
-      </ol>
-      <p>Manage it later with <code>quotapus start | stop | update | uninstall</code>.</p>
-    </div>
-    <div>
-      <h2>Works with</h2>
-      <p><b>Claude</b> via Claude Code: 5-hour session, weekly, and per-model weekly limits.<br><b>Cursor</b>: monthly plan usage and on-demand spend.</p>
-      <p>Cursor support is experimental. Both providers use unofficial usage endpoints, which may change.</p>
+  <section id="faq">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="kicker">How it works</div>
+        <h2>What you'd ask before installing.</h2>
+      </div>
+      <dl class="faq reveal">
+        <div><dt>What do I need?</dt><dd>macOS 11 or later on Apple Silicon or Intel, plus Claude Code signed in with your Claude account, the Cursor app signed in, or both. No Node, no Homebrew, no quotapus account.</dd></div>
+        <div><dt>Where does the data come from?</dt><dd>For Claude, quotapus uses Claude Code's login from the Keychain and asks Anthropic's usage endpoint. If you turn it on, it can also read the limits Claude Code passes to its status line. For Cursor, it uses the Cursor app's login and asks cursor.com. Both endpoints are unofficial and may change. It checks every 5 minutes by default.</dd></div>
+        <div><dt>Does it use up my quota?</dt><dd>No, reading usage is free. The one exception is the <em>Refresh login</em> button, shown when Claude Code's login has expired: it sends one tiny Haiku message through Claude Code so Claude Code renews its own login.</dd></div>
+        <div><dt>How good is the forecast?</dt><dd>It's an estimate: a straight line from your recent pace (the last hour for the 5-hour session, the last 6 hours for weekly limits), drawn with a band around it. Weekly and monthly forecasts skip your days off.</dd></div>
+        <div><dt>Why Electron?</dt><dd>It let one person build the charts quickly, without Apple's paid developer program. The cost is size: the app takes about 240 MB on disk.</dd></div>
+        <div><dt>How is it different from ccusage or CodexBar?</dt><dd>ccusage reports Claude Code's token use in the terminal; CodexBar is a native menu bar app for many providers. quotapus focuses on what happens next: when you'll run out, which project used it, and the daily pace that would make it last.</dd></div>
+      </dl>
     </div>
   </section>
 
-  <footer><span>quotapus · open source (MIT) · <a href="https://github.com/VladUdri/quotapus" style="color:inherit">GitHub</a></span><span>Not affiliated with Anthropic or Cursor.</span></footer>
+  <section id="privacy">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="kicker">Privacy</div>
+        <h2>No account. No server. No telemetry.</h2>
+        <p class="intro">quotapus runs on your Mac and talks to exactly three hosts.</p>
+      </div>
+      <div class="hosts reveal">
+        <div><code>api.anthropic.com</code><span>Your Claude usage, using Claude Code's login.</span></div>
+        <div><code>cursor.com</code><span>Your Cursor usage, using the Cursor app's login.</span></div>
+        <div><code>github.com</code><span>Once a day, to check for a new version. No login and nothing about you is sent (GitHub sees your IP address, as with any request). You can turn it off in Settings.</span></div>
+      </div>
+      <div class="notes reveal">
+        <div><h3>Your logins stay as they are</h3><p>quotapus reads them but never refreshes or rewrites them, so it can't log you out. <em>Refresh login</em> asks Claude Code to renew its own.</p></div>
+        <div><h3>Your prompts aren't read</h3><p>The per-project breakdown reads token counts from Claude Code's local logs. Prompt text is never read or stored.</p></div>
+        <div><h3>Every line is public</h3><p>MIT licensed. The installer is about 100 lines of bash and checks Electron's download against the official checksums.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <div class="box reveal">
+        <div>
+          <div class="kicker">Install</div>
+          <h2>One line in Terminal.</h2>
+          <p class="intro" style="font-size:17px">Files downloaded with curl aren't quarantined, so macOS shows no Gatekeeper prompt. The app is signed on your Mac (ad hoc), not notarized by Apple.</p>
+          <div class="cmd">
+            <code><span class="p">$ </span><span class="k">curl -fsSL</span> https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh <span class="k">| bash</span></code>
+            <button class="copy" type="button">Copy</button>
+          </div>
+          <p class="small">Then click the ring in your menu bar. For Cursor, choose <em>Always Allow</em> when macOS asks about "Cursor Safe Storage".</p>
+        </div>
+        <div>
+          <h3>What it changes on your Mac</h3>
+          <ul class="changes">
+            <li>Adds <code>Quotapus.app</code> to <code>~/Applications</code> and starts it.</li>
+            <li>Adds a <code>quotapus</code> command to <code>~/.local/bin</code>, and that folder to your PATH in <code>~/.zshrc</code> if it's missing.</li>
+            <li>Keeps settings and history in <code>~/Library/Application Support/quotapus</code>.</li>
+          </ul>
+          <h3>Manage it from Terminal</h3>
+          <div class="cli">
+            <code>quotapus update</code><span>Install the latest release.</span>
+            <code>quotapus stop</code><span>Quit. <code style="font-weight:600">start</code> relaunches it.</span>
+            <code>quotapus uninstall</code><span>Remove everything and restore your Claude Code status line.</span>
+          </div>
+          <p class="small">New versions show up as a card in the popup; nothing installs by itself. Cursor support is experimental.</p>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <div class="wrap">
+    <span>quotapus · MIT · <a href="https://github.com/VladUdri/quotapus">GitHub</a> · <a href="https://github.com/VladUdri/quotapus/issues">Report an issue</a></span>
+    <span>Not affiliated with Anthropic or Cursor.</span>
+  </div>
+</footer>
+
 <script>
-  document.getElementById("copy").onclick = async (e) => {
-    try { await navigator.clipboard.writeText(document.getElementById("cmd").textContent); e.target.textContent = "Copied. Paste it in Terminal"; }
-    catch { e.target.textContent = "Select the command below"; }
-    setTimeout(() => (e.target.textContent = "Copy install command"), 2500);
+  const CMD = "curl -fsSL https://raw.githubusercontent.com/VladUdri/quotapus/main/install.sh | bash";
+  for (const b of document.querySelectorAll(".copy")) {
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(CMD); b.textContent = "Copied"; }
+      catch { getSelection().selectAllChildren(b.previousElementSibling); b.textContent = "Press ⌘C"; }
+      setTimeout(() => (b.textContent = "Copy"), 2000);
+    });
+  }
+
+  // Hero demo: a silent loop. It doesn't start by itself when the visitor prefers reduced motion.
+  const loop = document.getElementById("loop"), pause = document.getElementById("pause");
+  const setIcon = () => {
+    pause.querySelector("use").setAttribute("href", loop.paused ? "#i-play" : "#i-pause");
+    pause.setAttribute("aria-label", loop.paused ? "Play the demo" : "Pause the demo");
   };
+  loop.addEventListener("play", setIcon); loop.addEventListener("pause", setIcon);
+  pause.addEventListener("click", () => (loop.paused ? loop.play() : loop.pause()));
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) loop.play().catch(setIcon);
+  setIcon();
+
+  const nav = document.getElementById("nav");
+  addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 8), { passive: true });
+
+  if ("IntersectionObserver" in window && !location.search.includes("still")) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { rootMargin: "0px 0px -8% 0px" });
+    document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = (el.classList.contains("f") ? (i % 3) * 70 : 0) + "ms"; io.observe(el); });
+  } else document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in"));
 </script>
 </body>
 </html>
