@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { GIFEncoder, quantize, applyPalette } = require("gifenc");
-const { mock } = require("../dist/providers/mock.js");
+const { mock, mockCursor } = require("../dist/providers/mock.js");
 
 const W = 400, THEME = process.env.DEMO_THEME === "light" ? "light" : "dark";
 const BG = THEME === "dark" ? "#1e1e20" : "#f5f5f7";
@@ -12,7 +12,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = THEME;
-  const snapshot = async () => { const r = await mock.fetch(); return { results: [r], updatedAt: Date.now(), lastOkAt: Date.now(), nextRefreshAt: Date.now() + 3e5, welcome: false }; };
+  const snapshot = async () => ({ results: [await mock.fetch(), await mockCursor.fetch()], updatedAt: Date.now(), lastOkAt: Date.now(), nextRefreshAt: Date.now() + 3e5, welcome: false });
   ipcMain.handle("quota:get", snapshot);
   ipcMain.handle("quota:refresh", snapshot);
   ipcMain.handle("settings:get", () => ({}));
@@ -33,22 +33,26 @@ app.whenReady().then(async () => {
     const palette = quantize(rgba, 256);
     gif.writeFrame(applyPalette(rgba, palette), width, height, { palette, delay });
   };
-  const hold = async (ms, step = 100) => { for (let t = 0; t < ms; t += step) { await frame(step); await sleep(step); } };
+  const hold = async (ms, step = 125) => { for (let t = 0; t < ms; t += step) { await frame(step); await sleep(step); } };
   const hover = (f) => js(`(() => { const r = [...document.querySelectorAll('rect')].find((x) => x.getAttribute('fill') === 'transparent'); if (!r) return;
     const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('mousemove', { clientX: b.left + b.width * ${f}, clientY: b.top + 20, bubbles: true })); })()`);
+  const claude = `[...document.querySelectorAll('.card')].find((c) => c.querySelector('header b')?.textContent === 'Claude')`;
+  const weekly = `[...${claude}.querySelectorAll('.row')].find((r) => r.querySelector('.label')?.textContent === 'Weekly')`;
 
   await sleep(900);
   await hold(1400);                                   // collapsed: ring settles
-  await js(`document.querySelector('.hero').click()`); // open the Runway panel
+  await js(`${claude}.querySelector('.hero').click()`); // open the Runway panel
   await sleep(700); await hold(1600);
   for (const f of [0.15, 0.4, 0.62, 0.8, 0.93]) { await hover(f); await sleep(80); await hold(500, 125); }  // tooltip follows the pointer
   await js(`[...document.querySelectorAll('rect')].find((x) => x.getAttribute('fill') === 'transparent')?.dispatchEvent(new MouseEvent('mouseleave'))`);
-  await js(`document.querySelector('.hero').click()`); // collapse
+  await js(`${claude}.querySelector('.hero').click()`); // collapse
   await sleep(500); await hold(500);
-  await js(`document.querySelector('.row').click()`);  // open Weekly
+  await js(`${weekly}.click()`);  // open Weekly
   await sleep(700); await hold(1300);
   await js(`[...document.querySelectorAll('.seg button')].find((b) => b.textContent === '24h')?.click()`);
   await sleep(700); await hold(2200);
+  await js(`(() => { const w = ${weekly}; if (w?.classList.contains('open')) w.click(); })()`);  // collapse Weekly, so the Cursor card shows again
+  await sleep(700); await hold(1000);
 
   gif.finish();
   const out = path.join(__dirname, `../assets/demo${THEME === "light" ? "-light" : ""}.gif`);
