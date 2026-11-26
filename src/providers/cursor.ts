@@ -53,6 +53,9 @@ export function decryptSafeStorage(value: string, keychainPassword: string): str
 const num = (v: unknown): number | undefined => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 const obj = (v: unknown): Record<string, unknown> | undefined => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
 const pct = (v: number) => Math.max(0, Math.min(100, v));
+// Cursor reports money in cents. Only a positive limit makes a budget worth showing.
+const dollars = (used: number | undefined, limit: number | undefined): Pick<QuotaMeter, "usedUsd" | "limitUsd"> =>
+  used !== undefined && limit !== undefined && limit > 0 ? { usedUsd: used / 100, limitUsd: limit / 100 } : {};
 
 export interface Parsed { plan?: string; meters: QuotaMeter[] }
 
@@ -68,7 +71,8 @@ export function parseUsageSummary(json: unknown): Parsed {
   if (plan) {
     // Preferred: the percentage Cursor itself shows. Fallback: used / limit (both in cents).
     const total = num(plan.totalPercentUsed) ?? (num(plan.used) !== undefined && num(plan.limit) ? (num(plan.used)! / num(plan.limit)!) * 100 : undefined);
-    if (total !== undefined) meters.push({ label: "Monthly plan", usedPercent: pct(total), ...cycle });
+    const planLimit = num(plan.limit), planUsed = num(plan.used) ?? (planLimit !== undefined && total !== undefined ? (total * planLimit) / 100 : undefined);
+    if (total !== undefined) meters.push({ label: "Monthly plan", usedPercent: pct(total), ...dollars(planUsed, planLimit), ...cycle });
     const auto = num(plan.autoPercentUsed), api = num(plan.apiPercentUsed);
     if (auto !== undefined) meters.push({ label: "Auto + Composer", usedPercent: pct(auto), ...cycle });
     if (api !== undefined) meters.push({ label: "Named models (API)", usedPercent: pct(api), ...cycle });
@@ -76,16 +80,16 @@ export function parseUsageSummary(json: unknown): Parsed {
   // Enterprise/team accounts report a single "overall" allowance instead of a plan breakdown.
   const overall = obj(obj(d.individualUsage)?.overall);
   if (!meters.length && overall && overall.enabled !== false && d.isUnlimited !== true && num(overall.limit) && num(overall.used) !== undefined) {
-    meters.push({ label: "Monthly usage", usedPercent: pct((num(overall.used)! / num(overall.limit)!) * 100), ...cycle });
+    meters.push({ label: "Monthly usage", usedPercent: pct((num(overall.used)! / num(overall.limit)!) * 100), ...dollars(num(overall.used), num(overall.limit)), ...cycle });
   }
   const od = obj(obj(d.individualUsage)?.onDemand);
   if (od && od.enabled !== false && num(od.limit) && num(od.used) !== undefined) {
-    meters.push({ label: "On-demand spend", usedPercent: pct((num(od.used)! / num(od.limit)!) * 100), ...cycle });
+    meters.push({ label: "On-demand spend", usedPercent: pct((num(od.used)! / num(od.limit)!) * 100), ...dollars(num(od.used), num(od.limit)), ...cycle });
   }
   // A team's shared on-demand budget only matters once some of it has been spent.
   const team = obj(obj(d.teamUsage)?.onDemand);
   if (team && team.enabled !== false && num(team.limit) && (num(team.used) ?? 0) > 0) {
-    meters.push({ label: "Team on-demand", usedPercent: pct((num(team.used)! / num(team.limit)!) * 100), ...cycle });
+    meters.push({ label: "Team on-demand", usedPercent: pct((num(team.used)! / num(team.limit)!) * 100), ...dollars(num(team.used), num(team.limit)), ...cycle });
   }
   const m = typeof d.membershipType === "string" ? d.membershipType : undefined;
   return { plan: m ? m[0].toUpperCase() + m.slice(1) : undefined, meters };

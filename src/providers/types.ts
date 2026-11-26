@@ -34,6 +34,8 @@ export interface QuotaMeter {
   curveExact?: boolean;
   daily?: { t: number; v: number }[]; // usage per local day, oldest first (today last)
   dailyUnit?: "usd" | "tokens";
+  usedUsd?: number;  // dollars used and the dollar budget, when the provider has one (Cursor)
+  limitUsd?: number;
   usdPerPercent?: number; // what 1% of this meter costs, when known (Cursor), to show budgets in dollars
 }
 // "not_connected" = user hasn't set this provider up yet (show setup hint, not an error)

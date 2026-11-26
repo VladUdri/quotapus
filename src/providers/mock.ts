@@ -55,7 +55,7 @@ export const mockCursor: Provider = {
   async fetch() {
     if (errors) return { id: "cursor", name: "Cursor", status: "error", meters: [], message: "Couldn't reach Cursor (fetch failed)." };
     const cycle = { windowMinutes: 30 * 1440, resetsAt: inHours(14 * 24 + 5) }, now = Date.now();
-    const total: QuotaMeter = { label: "Monthly plan", ...cycle, usedPercent: 46 };
+    const total: QuotaMeter = { label: "Monthly plan", ...cycle, usedPercent: 46, usedUsd: 9.2, limitUsd: 20 };
     attachHistory([total], workEvents(now - 28 * 24 * H, now, 12).map((e) => ({ t: e.t, charged: e.w, list: 0, tokens: 0, model: e.model })), now);
     sparkFrom(total, true);
     return { id: "cursor", name: "Cursor", status: "ok", plan: "Pro", meters: [

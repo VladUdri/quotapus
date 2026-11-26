@@ -105,3 +105,22 @@ test("attachHistory: whole-cycle curve pinned to the reported %, daily spend, sp
   assert.equal(Math.round((m as any).daily.reduce((s: number, d: any) => s + d.v, 0) * 100), 1499); // all 4 events are within 28 days
   assert.equal((m as any).usdPerPercent, 5 / 40); // $5 spent this cycle for 40%
 });
+
+test("parseUsageSummary converts cents to dollars for plan, overall, on-demand and team", () => {
+  const p = parseUsageSummary({
+    individualUsage: { plan: { used: 1240, limit: 2000, totalPercentUsed: 62, autoPercentUsed: 10 }, onDemand: { enabled: true, used: 500, limit: 2000 } },
+    teamUsage: { onDemand: { enabled: true, used: 300, limit: 10000 } },
+  });
+  assert.deepEqual(p.meters.map((m) => [m.label, m.usedUsd, m.limitUsd]), [["Monthly plan", 12.4, 20], ["Auto + Composer", undefined, undefined], ["On-demand spend", 5, 20], ["Team on-demand", 3, 100]]);
+  const o = parseUsageSummary({ individualUsage: { overall: { enabled: true, used: 40531, limit: 85000 } } });
+  assert.deepEqual([o.meters[0].usedUsd, o.meters[0].limitUsd], [405.31, 850]);
+});
+
+test("parseUsageSummary derives plan dollars from the percentage, and skips them without a limit", () => {
+  const a = parseUsageSummary({ individualUsage: { plan: { totalPercentUsed: 25, limit: 2000 } } }).meters[0];
+  assert.deepEqual([a.usedUsd, a.limitUsd], [5, 20]);
+  const b = parseUsageSummary({ individualUsage: { plan: { totalPercentUsed: 25 } } }).meters[0];
+  assert.deepEqual([b.usedUsd, b.limitUsd], [undefined, undefined]);
+  const c = parseUsageSummary({ individualUsage: { plan: { used: 5, limit: 0, totalPercentUsed: 25 } } }).meters[0];
+  assert.equal(c.limitUsd, undefined);
+});

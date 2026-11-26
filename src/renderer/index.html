@@ -60,6 +60,7 @@
   .rtop .label { font-size: 13px; font-weight: 500; white-space: nowrap }
   .rtop .sub { flex: 1; min-width: 0; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
   .rtop .rp { font-size: 13px; font-weight: 600; white-space: nowrap }
+  .row > .sub { margin: 3px 21px 0 0; text-align: right }
   .status.st-warn, .sub.st-warn { color: var(--warn) } .status.st-bad, .sub.st-bad { color: var(--bad) }
   .rtop .chev, .rtop .nochev { align-self: center }
   .meterbar { height: 5px; border-radius: 3px; background: var(--track); margin-top: 6px; overflow: hidden; margin-right: 21px }
@@ -702,11 +703,14 @@ function expandable(node, key, m, chevParent) {
   return node;
 }
 
+const hasBudget = (m) => m.usedUsd != null && m.limitUsd > 0;
+
 function hero(key, m, asOf) {
   const p = clamp(m.usedPercent), st = status(m, asOf);
   const info = el("div", "info", undefined, [
     el("div", "label", m.label),
     m.resetsAt ? el("div", "sub", countdown(m.resetsAt) + " \u00B7 " + dtfmt(Date.parse(m.resetsAt))) : null,
+    hasBudget(m) ? el("div", "sub", fmtUsd(m.usedUsd) + " of " + fmtUsd(m.limitUsd) + " used") : null,
     st ? el("div", "status" + (st.cls ? " st-" + st.cls : ""), st.text) : null,
   ]);
   const node = el("div", "hero lv-" + level(p), undefined, [ring(key, p), info]);
@@ -718,7 +722,8 @@ function row(key, m, asOf) {
   // Calm meters show when they reset; ones that need attention say why instead (the reset is in the details).
   const sub = st && st.cls ? el("span", "sub st-" + st.cls, st.text) : el("span", "sub", countdown(m.resetsAt));
   const top = el("div", "rtop", undefined, [el("span", "label", m.label), sub, el("span", "rp", Math.round(p) + "%")]);
-  const node = el("div", "row lv-" + level(p), undefined, [top, bar(key, p)]);
+  const budget = hasBudget(m) ? el("div", "sub", fmtUsd(m.usedUsd) + " of " + fmtUsd(m.limitUsd)) : null;
+  const node = el("div", "row lv-" + level(p), undefined, [top, bar(key, p), budget]);
   return expandable(node, key, m, top);
 }
 
