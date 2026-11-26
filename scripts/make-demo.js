@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
   await sleep(700); await hold(1300);
   await js(`[...document.querySelectorAll('.seg button')].find((b) => b.textContent === '24h')?.click()`);
   await sleep(700); await hold(2200);
-  await js(`document.querySelector('.row.open').click()`);  // collapse Weekly, so the Cursor card shows again
+  await js(`[...document.querySelectorAll('.row.open')].find((r) => r.querySelector('.label')?.textContent === 'Weekly')?.click()`);  // collapse Weekly, so the Cursor card shows again
   await sleep(700); await hold(1000);
 
   gif.finish();
