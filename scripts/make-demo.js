@@ -36,20 +36,22 @@ app.whenReady().then(async () => {
   const hold = async (ms, step = 100) => { for (let t = 0; t < ms; t += step) { await frame(step); await sleep(step); } };
   const hover = (f) => js(`(() => { const r = [...document.querySelectorAll('rect')].find((x) => x.getAttribute('fill') === 'transparent'); if (!r) return;
     const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('mousemove', { clientX: b.left + b.width * ${f}, clientY: b.top + 20, bubbles: true })); })()`);
+  const claude = `[...document.querySelectorAll('.card')].find((c) => c.querySelector('header b')?.textContent === 'Claude')`;
+  const weekly = `[...${claude}.querySelectorAll('.row')].find((r) => r.querySelector('.label')?.textContent === 'Weekly')`;
 
   await sleep(900);
   await hold(1400);                                   // collapsed: ring settles
-  await js(`document.querySelector('.hero').click()`); // open the Runway panel
+  await js(`${claude}.querySelector('.hero').click()`); // open the Runway panel
   await sleep(700); await hold(1600);
   for (const f of [0.15, 0.4, 0.62, 0.8, 0.93]) { await hover(f); await sleep(80); await hold(500, 125); }  // tooltip follows the pointer
   await js(`[...document.querySelectorAll('rect')].find((x) => x.getAttribute('fill') === 'transparent')?.dispatchEvent(new MouseEvent('mouseleave'))`);
-  await js(`document.querySelector('.hero').click()`); // collapse
+  await js(`${claude}.querySelector('.hero').click()`); // collapse
   await sleep(500); await hold(500);
-  await js(`document.querySelector('.row').click()`);  // open Weekly
+  await js(`${weekly}.click()`);  // open Weekly
   await sleep(700); await hold(1300);
   await js(`[...document.querySelectorAll('.seg button')].find((b) => b.textContent === '24h')?.click()`);
   await sleep(700); await hold(2200);
-  await js(`[...document.querySelectorAll('.row.open')].find((r) => r.querySelector('.label')?.textContent === 'Weekly')?.click()`);  // collapse Weekly, so the Cursor card shows again
+  await js(`(() => { const w = ${weekly}; if (w?.classList.contains('open')) w.click(); })()`);  // collapse Weekly, so the Cursor card shows again
   await sleep(700); await hold(1000);
 
   gif.finish();
