@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/demo.gif" width="400" alt="quotapus in action: open a meter, hover the chart to see when you'll run out, switch the weekly chart to the last 24 hours">
+  <img src="assets/demo.gif" width="400" alt="quotapus in action: open a meter, hover the chart to see when you'll run out, switch the weekly chart to the last 24 hours; the Cursor card shows its monthly plan in dollars">
 </p>
 
 quotapus is a macOS menu bar app that shows how much of your **Claude** and **Cursor** quota you've used,

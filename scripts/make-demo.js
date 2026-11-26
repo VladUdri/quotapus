@@ -49,8 +49,8 @@ app.whenReady().then(async () => {
   await sleep(700); await hold(1300);
   await js(`[...document.querySelectorAll('.seg button')].find((b) => b.textContent === '24h')?.click()`);
   await sleep(700); await hold(2200);
-  await js(`document.querySelector('.row').click()`);  // collapse, so the Cursor card shows again
-  await sleep(700); await hold(2200);
+  await js(`document.querySelector('.row.open').click()`);  // collapse Weekly, so the Cursor card shows again
+  await sleep(700); await hold(1000);
 
   gif.finish();
   const out = path.join(__dirname, `../assets/demo${THEME === "light" ? "-light" : ""}.gif`);
