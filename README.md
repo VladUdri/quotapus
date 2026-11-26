@@ -64,7 +64,7 @@ thresholds.
 | Provider | Setup | Shows |
 |---|---|---|
 | **Claude** | Sign in to [Claude Code](https://claude.com/claude-code). | 5-hour session, weekly, and per-model weekly limits, with forecast and per-project breakdown. |
-| **Cursor** | Sign in to the Cursor app. When macOS asks to allow access to "Cursor Safe Storage", choose **Always Allow**. | Monthly plan usage (with dollars used of budget), Auto + Composer vs. named models, on-demand spend. |
+| **Cursor** | Sign in to the Cursor app. When macOS asks to allow access to "Cursor Safe Storage", choose **Always Allow**. | Monthly plan usage in dollars and percent, Auto + Composer vs. named models, on-demand spend. |
 
 Cursor support is experimental. Until you sign in to Claude Code, the Claude card shows how to set it up. The
 Cursor card is hidden if Cursor isn't installed or signed in.
