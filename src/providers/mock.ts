@@ -62,6 +62,7 @@ export const mockCursor: Provider = {
       total,
       { label: "Auto + Composer", ...cycle, spark: spark(31, 15 * 24), usedPercent: 31, forecast: { ratePerHour: 0.08, minutesToLimit: null, hitsBeforeReset: false } },
       { label: "Named models (API)", ...cycle, spark: spark(68, 15 * 24), usedPercent: 68, forecast: { ratePerHour: 0.3, minutesToLimit: 6400, hitsBeforeReset: true } },
+      { label: "On-demand spend", ...cycle, usedPercent: 25, usedUsd: 5, limitUsd: 20 },
     ] };
   },
 };
