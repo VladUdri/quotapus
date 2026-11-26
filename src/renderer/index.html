@@ -702,11 +702,14 @@ function expandable(node, key, m, chevParent) {
   return node;
 }
 
+const hasBudget = (m) => m.usedUsd != null && m.limitUsd > 0;
+
 function hero(key, m, asOf) {
   const p = clamp(m.usedPercent), st = status(m, asOf);
   const info = el("div", "info", undefined, [
     el("div", "label", m.label),
     m.resetsAt ? el("div", "sub", countdown(m.resetsAt) + " \u00B7 " + dtfmt(Date.parse(m.resetsAt))) : null,
+    hasBudget(m) ? el("div", "sub", fmtUsd(m.usedUsd) + " of " + fmtUsd(m.limitUsd) + " used") : null,
     st ? el("div", "status" + (st.cls ? " st-" + st.cls : ""), st.text) : null,
   ]);
   const node = el("div", "hero lv-" + level(p), undefined, [ring(key, p), info]);
@@ -717,7 +720,7 @@ function row(key, m, asOf) {
   const p = clamp(m.usedPercent), st = status(m, asOf);
   // Calm meters show when they reset; ones that need attention say why instead (the reset is in the details).
   const sub = st && st.cls ? el("span", "sub st-" + st.cls, st.text) : el("span", "sub", countdown(m.resetsAt));
-  const top = el("div", "rtop", undefined, [el("span", "label", m.label), sub, el("span", "rp", Math.round(p) + "%")]);
+  const top = el("div", "rtop", undefined, [el("span", "label", m.label), sub, el("span", "rp", (hasBudget(m) ? fmtUsd(m.usedUsd) + " / " + fmtUsd(m.limitUsd) + " \u00B7 " : "") + Math.round(p) + "%")]);
   const node = el("div", "row lv-" + level(p), undefined, [top, bar(key, p)]);
   return expandable(node, key, m, top);
 }
