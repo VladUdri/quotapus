@@ -4,7 +4,7 @@ const { app, BrowserWindow, ipcMain, nativeTheme } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { GIFEncoder, quantize, applyPalette } = require("gifenc");
-const { mock } = require("../dist/providers/mock.js");
+const { mock, mockCursor } = require("../dist/providers/mock.js");
 
 const W = 400, THEME = process.env.DEMO_THEME === "light" ? "light" : "dark";
 const BG = THEME === "dark" ? "#1e1e20" : "#f5f5f7";
@@ -12,7 +12,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 app.whenReady().then(async () => {
   nativeTheme.themeSource = THEME;
-  const snapshot = async () => { const r = await mock.fetch(); return { results: [r], updatedAt: Date.now(), lastOkAt: Date.now(), nextRefreshAt: Date.now() + 3e5, welcome: false }; };
+  const snapshot = async () => ({ results: [await mock.fetch(), await mockCursor.fetch()], updatedAt: Date.now(), lastOkAt: Date.now(), nextRefreshAt: Date.now() + 3e5, welcome: false });
   ipcMain.handle("quota:get", snapshot);
   ipcMain.handle("quota:refresh", snapshot);
   ipcMain.handle("settings:get", () => ({}));
@@ -48,6 +48,8 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('.row').click()`);  // open Weekly
   await sleep(700); await hold(1300);
   await js(`[...document.querySelectorAll('.seg button')].find((b) => b.textContent === '24h')?.click()`);
+  await sleep(700); await hold(2200);
+  await js(`document.querySelector('.row').click()`);  // collapse, so the Cursor card shows again
   await sleep(700); await hold(2200);
 
   gif.finish();
