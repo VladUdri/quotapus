@@ -33,7 +33,7 @@ app.whenReady().then(async () => {
     const palette = quantize(rgba, 256);
     gif.writeFrame(applyPalette(rgba, palette), width, height, { palette, delay });
   };
-  const hold = async (ms, step = 100) => { for (let t = 0; t < ms; t += step) { await frame(step); await sleep(step); } };
+  const hold = async (ms, step = 125) => { for (let t = 0; t < ms; t += step) { await frame(step); await sleep(step); } };
   const hover = (f) => js(`(() => { const r = [...document.querySelectorAll('rect')].find((x) => x.getAttribute('fill') === 'transparent'); if (!r) return;
     const b = r.getBoundingClientRect(); r.dispatchEvent(new MouseEvent('mousemove', { clientX: b.left + b.width * ${f}, clientY: b.top + 20, bubbles: true })); })()`);
   const claude = `[...document.querySelectorAll('.card')].find((c) => c.querySelector('header b')?.textContent === 'Claude')`;
